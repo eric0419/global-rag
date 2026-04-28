@@ -15,6 +15,11 @@
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; display: none; line-height: 1.6; }
         #loading { text-align: center; display: none; color: #666; margin-top: 20px; font-weight: bold; }
         .raw-data { font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+        
+        /* 이미지 갤러리 CSS */
+        .image-gallery { display: flex; gap: 15px; margin-bottom: 25px; justify-content: center; overflow-x: auto; padding-bottom: 5px; }
+        .image-gallery img { width: 100%; max-width: 170px; height: 120px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .image-gallery img:hover { transform: scale(1.05); }
     </style>
 </head>
 <body>
@@ -27,10 +32,12 @@
             <button onclick="doSearch()">분석하기</button>
         </div>
 
-        <div id="loading">분석 중입니다... (약 10초 소요)</div>
+        <div id="loading">5대 커뮤니티의 데이터를 긁어와 AI가 분석 중입니다... (약 10초 소요)</div>
 
         <div class="card" id="resultCard">
-            <h3 style="margin-top:0; color: #1a73e8;">✨ 3줄 요약 리포트</h3>
+            <div id="imageGallery" class="image-gallery"></div>
+            
+            <h3 style="margin-top:0; color: #1a73e8;">3줄 요약 리포트</h3>
             <p id="reportText"></p>
             <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
             <h4 style="margin:0 0 10px 0; color: #555;">수집된 원본 데이터 (미리보기)</h4>
@@ -41,13 +48,12 @@
     <script>
         async function doSearch() {
             const query = document.getElementById('searchInput').value;
-            if (!query) return alert('검색어를 입력하세요!');
+            if (!query) return alert('검색어를 입력하세요.');
 
             document.getElementById('loading').style.display = 'block';
             document.getElementById('resultCard').style.display = 'none';
 
             try {
-                // 파이썬 백엔드로 데이터 요청
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -57,6 +63,18 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    const gallery = document.getElementById('imageGallery');
+                    gallery.innerHTML = ''; 
+                    
+                    if (data.images && data.images.length > 0) {
+                        data.images.forEach(url => {
+                            const img = document.createElement('img');
+                            img.src = url;
+                            img.onerror = function() { this.style.display = 'none'; };
+                            gallery.appendChild(img);
+                        });
+                    }
+
                     document.getElementById('reportText').innerText = data.report;
                     document.getElementById('rawDataText').innerText = data.raw_data;
                     document.getElementById('resultCard').style.display = 'block';

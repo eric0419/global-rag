@@ -6,7 +6,6 @@ from openai import OpenAI
 
 app = Flask(__name__)
 
-# 로컬(내 컴퓨터) 테스트를 위한 dotenv
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -15,6 +14,25 @@ except ImportError:
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# 검색어 기반 상위 3개 이미지 가져오기
+def fetch_top_images(query):
+    url = "https://google.serper.dev/images"
+    payload = json.dumps({"q": query, "gl": "kr", "hl": "ko", "num": 3})
+    headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
+    
+    image_urls = []
+    try:
+        response = requests.request("POST", url, headers=headers, data=payload)
+        response.raise_for_status()
+        items = response.json().get('images', [])
+        
+        for item in items[:3]:
+            image_urls.append(item.get('imageUrl'))
+    except Exception as e:
+        print(f"이미지 검색 에러: {e}")
+        
+    return image_urls
 
 def fetch_community_data(query, sites):
     all_context = ""
@@ -59,7 +77,6 @@ def generate_core_summary(context_text):
     except Exception as e:
         return f"LLM 분석 에러: {e}"
 
-# 프론트엔드에서 /api/search 로 요청을 보내면 이 함수가 실행됨
 @app.route('/api/search', methods=['POST'])
 def search_handler():
     data = request.json
@@ -70,14 +87,12 @@ def search_handler():
         
     target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
-    # 1. 검색 수집
+    images = fetch_top_images(query)
     collected_context = fetch_community_data(query, target_sites)
-    
-    # 2. 요약 생성
     final_report = generate_core_summary(collected_context)
     
-    # 프론트엔드로 결과 전달
     return jsonify({
+        "images": images,
         "report": final_report,
         "raw_data": collected_context
     })
