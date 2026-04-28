@@ -5,53 +5,105 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global Echo RAG</title>
     <style>
-        body { font-family: 'Pretendard', -apple-system, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 50px 20px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 600px; }
-        h1 { text-align: center; color: #1a73e8; }
-        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
-        input { flex: 1; padding: 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
-        button { padding: 15px 25px; background-color: #1a73e8; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
-        button:hover { background-color: #1557b0; }
-        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; display: none; line-height: 1.6; }
-        #loading { text-align: center; display: none; color: #666; margin-top: 20px; font-weight: bold; }
-        .raw-data { font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+        /* 전체 기본 설정 (ChatGPT 스타일의 깔끔한 톤) */
+        body, html { height: 100%; margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; background-color: #ffffff; color: #333; }
         
-        /* 이미지 갤러리 CSS */
-        .image-gallery { display: flex; gap: 15px; margin-bottom: 25px; justify-content: center; overflow-x: auto; padding-bottom: 5px; }
-        .image-gallery img { width: 100%; max-width: 170px; height: 120px; object-fit: cover; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.2s; }
-        .image-gallery img:hover { transform: scale(1.05); }
+        /* 좌측 상단 영문 로고 */
+        .top-logo { position: absolute; top: 24px; left: 24px; font-weight: 700; font-size: 18px; color: #555; letter-spacing: -0.5px; }
+        
+        /* 메인 레이아웃 (초기에는 중앙 정렬, 검색 후에는 상단 정렬) */
+        .layout { display: flex; flex-direction: column; height: 100%; align-items: center; justify-content: center; transition: all 0.4s ease; padding: 0 20px; box-sizing: border-box; }
+        .layout.searched { justify-content: flex-start; padding-top: 80px; }
+        
+        /* 콘텐츠 컨테이너 영역 */
+        .container { width: 100%; max-width: 800px; position: relative; }
+        
+        /* 메인 타이틀 */
+        .main-title { text-align: center; font-size: 36px; font-weight: bold; color: #111; margin-bottom: 40px; transition: opacity 0.3s ease; }
+        
+        /* 검색창 래퍼 (초기: 중앙, 검색 후: 하단 고정) */
+        .search-wrapper { width: 100%; transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); }
+        .search-wrapper.bottom { position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%); max-width: 800px; padding: 0 20px; box-sizing: border-box; z-index: 100; }
+        
+        /* 검색창 디자인 */
+        .search-box { display: flex; gap: 10px; background: #f4f4f4; padding: 8px 8px 8px 24px; border-radius: 32px; border: 1px solid #e5e5e5; transition: box-shadow 0.2s; }
+        .search-box:focus-within { background: #ffffff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-color: #d0d0d0; }
+        input { flex: 1; border: none; padding: 12px 0; font-size: 16px; outline: none; background: transparent; }
+        button { padding: 12px 24px; background-color: #111; color: white; border: none; border-radius: 24px; cursor: pointer; font-size: 16px; font-weight: 600; transition: 0.2s; }
+        button:hover { background-color: #333; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        
+        /* 결과 영역 (검색 전에는 숨김) */
+        .results-container { display: none; width: 100%; padding-bottom: 140px; animation: fadeIn 0.5s ease forwards; }
+        
+        /* 카드 및 데이터 스타일 */
+        .card { padding: 0 20px 40px 20px; line-height: 1.7; }
+        .section-title { font-size: 20px; font-weight: bold; margin-bottom: 16px; color: #111; }
+        .report-text { font-size: 17px; color: #333; }
+        .raw-data { font-size: 14px; color: #666; background: #f9f9f9; padding: 20px; border-radius: 12px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; border: 1px solid #eee; }
+        
+        /* 로딩 상태 */
+        #loading { text-align: center; color: #666; padding: 40px 0; font-size: 16px; display: none; }
+        
+        /* 이미지 갤러리 */
+        .image-gallery { display: flex; gap: 12px; margin-bottom: 40px; }
+        .image-gallery img { width: calc(33.333% - 8px); height: 160px; object-fit: cover; border-radius: 12px; border: 1px solid #eaeaea; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Global Echo RAG</h1>
-        
-        <div class="search-box">
-            <input type="text" id="searchInput" placeholder="예: 체인소맨 결말 반응" onkeypress="if(event.key === 'Enter') doSearch()">
-            <button onclick="doSearch()">분석하기</button>
-        </div>
+    <div class="top-logo">Global Echo RAG</div>
 
-        <div id="loading">분석 중입니다...</div>
-
-        <div class="card" id="resultCard">
-            <div id="imageGallery" class="image-gallery"></div>
+    <div class="layout" id="mainLayout">
+        <div class="container">
             
-            <h3 style="margin-top:0; color: #1a73e8;">3줄 요약</h3>
-            <p id="reportText"></p>
-            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-            <h4 style="margin:0 0 10px 0; color: #555;">수집된 원본 데이터 (미리보기)</h4>
-            <div id="rawDataText" class="raw-data"></div>
+            <h1 class="main-title" id="mainTitle">다국어 커뮤니티 리서치 대시보드</h1>
+            
+            <div id="loading">분석을 진행하고 있습니다...</div>
+            
+            <div class="results-container" id="resultsContainer">
+                <div class="card">
+                    <div id="imageGallery" class="image-gallery"></div>
+                    
+                    <div class="section-title">핵심 요약 리포트</div>
+                    <div id="reportText" class="report-text"></div>
+                    
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 40px 0;">
+                    
+                    <div class="section-title" style="font-size: 16px; color: #666;">수집된 원본 데이터</div>
+                    <div id="rawDataText" class="raw-data"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="search-wrapper" id="searchWrapper">
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요 (예: 체인소맨 결말 반응)" onkeypress="if(event.key === 'Enter') doSearch()">
+            <button id="searchBtn" onclick="doSearch()">분석</button>
         </div>
     </div>
 
     <script>
         async function doSearch() {
-            const query = document.getElementById('searchInput').value;
+            const queryInput = document.getElementById('searchInput');
+            const query = queryInput.value.trim();
+            const searchBtn = document.getElementById('searchBtn');
+            
             if (!query) return alert('검색어를 입력하세요.');
 
+            // UI 상태 전환 (ChatGPT 스타일 모션)
+            document.getElementById('mainTitle').style.display = 'none';
+            document.getElementById('mainLayout').classList.add('searched');
+            document.getElementById('searchWrapper').classList.add('bottom');
+            
+            // 기존 결과 숨기기 및 로딩 표시
+            document.getElementById('resultsContainer').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('resultCard').style.display = 'none';
+            searchBtn.disabled = true;
 
             try {
                 const response = await fetch('/api/search', {
@@ -63,6 +115,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
+                    // 이미지 처리
                     const gallery = document.getElementById('imageGallery');
                     gallery.innerHTML = ''; 
                     
@@ -73,18 +126,30 @@
                             img.onerror = function() { this.style.display = 'none'; };
                             gallery.appendChild(img);
                         });
+                        gallery.style.display = 'flex';
+                    } else {
+                        gallery.style.display = 'none';
                     }
 
+                    // 텍스트 데이터 처리
                     document.getElementById('reportText').innerText = data.report;
                     document.getElementById('rawDataText').innerText = data.raw_data;
-                    document.getElementById('resultCard').style.display = 'block';
+                    
+                    // 결과 화면 표시
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('resultsContainer').style.display = 'block';
+                    
+                    // 스크롤 맨 위로 올리기
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
                     alert('에러 발생: ' + data.error);
+                    document.getElementById('loading').style.display = 'none';
                 }
             } catch (error) {
                 alert('서버와 통신할 수 없습니다.');
-            } finally {
                 document.getElementById('loading').style.display = 'none';
+            } finally {
+                searchBtn.disabled = false;
             }
         }
     </script>
