@@ -7,145 +7,55 @@
     <style>
         * { box-sizing: border-box; }
         
-        body, html { 
-            height: 100%; margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; 
-            background-color: #f4f7f6; color: #333; 
-        }
+        body, html { height: 100%; margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; background-color: #f4f7f6; color: #333; }
         
-        .top-logo { 
-            position: absolute; top: 24px; left: 24px; font-weight: bold; 
-            font-size: 18px; color: #1a73e8; z-index: 10;
-        }
+        .top-logo { position: absolute; top: 24px; left: 24px; font-weight: bold; font-size: 18px; color: #1a73e8; z-index: 10; }
         
-        .layout { 
-            display: flex; flex-direction: column; align-items: center; justify-content: center; 
-            min-height: 100vh; padding: 80px 20px 40px 20px; transition: all 0.4s ease; 
-        }
-        
-        .layout.searched { 
-            justify-content: flex-start; padding-top: 100px; padding-bottom: 120px; 
-        }
+        .layout { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 80px 20px 40px 20px; transition: all 0.4s ease; }
+        .layout.searched { justify-content: flex-start; padding-top: 100px; padding-bottom: 120px; }
         
         .container { width: 100%; max-width: 800px; position: relative; }
         
-        .main-title { 
-            text-align: center; font-size: 32px; font-weight: bold; 
-            color: #1a73e8; margin-bottom: 30px; 
-        }
+        .main-title { text-align: center; font-size: 32px; font-weight: bold; color: #1a73e8; margin-bottom: 30px; }
         
         .search-wrapper { width: 100%; transition: all 0.4s ease; }
+        .layout.searched .search-wrapper { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); max-width: 800px; padding: 0 20px; z-index: 100; }
         
-        .layout.searched .search-wrapper { 
-            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
-            max-width: 800px; padding: 0 20px; z-index: 100; 
-        }
-        
-        .search-box { 
-            display: flex; align-items: center; gap: 10px; background: #ffffff; 
-            padding: 10px 10px 10px 15px; border-radius: 30px; border: 1px solid #ddd; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s;
-        }
-        
+        .search-box { display: flex; align-items: center; gap: 10px; background: #ffffff; padding: 10px 10px 10px 15px; border-radius: 30px; border: 1px solid #ddd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s; }
         .search-box:focus-within { border-color: #1a73e8; box-shadow: 0 4px 15px rgba(26,115,232,0.15); }
         
-        /* --- 새로 추가된 커스텀 드롭다운 CSS --- */
-        .custom-select {
-            position: relative;
-            display: flex;
-            align-items: center;
-            border-right: 1px solid #eee;
-            padding-right: 10px;
-            cursor: pointer;
-            user-select: none;
-        }
-        .select-selected {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #333;
-            padding: 5px;
-        }
-        .select-selected img {
-            width: 24px;
-            border-radius: 2px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .select-selected::after {
-            content: '▼';
-            font-size: 10px;
-            margin-left: 5px;
-            color: #888;
-        }
-        .select-items {
-            position: absolute;
-            top: 130%;
-            left: 0;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 110px;
-            z-index: 101;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        .select-items div {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 15px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .select-items div:hover {
-            background-color: #f4f7f6;
-        }
-        .select-items img {
-            width: 24px;
-            border-radius: 2px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
+        .custom-select { position: relative; display: flex; align-items: center; border-right: 1px solid #eee; padding-right: 10px; cursor: pointer; user-select: none; }
+        .select-selected { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #333; padding: 5px; }
+        .select-selected img { width: 24px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .select-selected::after { content: '▼'; font-size: 10px; margin-left: 5px; color: #888; }
+        .select-items { position: absolute; top: 130%; left: 0; background-color: #fff; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 110px; z-index: 101; display: none; flex-direction: column; overflow: hidden; }
+        .select-items div { display: flex; align-items: center; gap: 10px; padding: 12px 15px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
+        .select-items div:hover { background-color: #f4f7f6; }
+        .select-items img { width: 24px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
         .select-show { display: flex; }
-        /* --------------------------------------- */
         
-        input { 
-            flex: 1; border: none; padding: 10px 5px; font-size: 16px; 
-            outline: none; background: transparent; 
-        }
-        
-        button { 
-            padding: 12px 25px; background-color: #1a73e8; color: white; border: none; 
-            border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; 
-        }
-        
+        input { flex: 1; border: none; padding: 10px 5px; font-size: 16px; outline: none; background: transparent; }
+        button { padding: 12px 25px; background-color: #1a73e8; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
         button:hover { background-color: #1557b0; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         
         .results-container { display: none; width: 100%; animation: fadeIn 0.5s ease forwards; }
-        
-        .card { 
-            background: white; padding: 30px; border-radius: 16px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); line-height: 1.6; 
-        }
-        
+        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); line-height: 1.6; }
         .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1a73e8; }
-        
         .report-text { font-size: 16px; color: #333; }
         
-        .raw-data { 
-            font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; 
-            border-radius: 8px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; border: 1px solid #eee; 
-        }
+        /* 파비콘이 적용된 원본 데이터 리스트 스타일 */
+        .raw-data-list { display: flex; flex-direction: column; gap: 15px; max-height: 400px; overflow-y: auto; padding-right: 10px; }
+        .raw-item { background: #f8f9fa; border: 1px solid #eee; border-radius: 8px; padding: 15px; transition: transform 0.1s; }
+        .raw-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+        .raw-site-info { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .raw-favicon { width: 16px; height: 16px; border-radius: 50%; }
+        .raw-domain { font-size: 12px; font-weight: bold; color: #555; }
+        .raw-title { font-size: 15px; font-weight: 600; color: #1a0dab; margin: 0 0 5px 0; text-decoration: none; display: block; }
+        .raw-title:hover { text-decoration: underline; }
+        .raw-snippet { font-size: 13px; color: #4d5156; margin: 0; line-height: 1.5; }
         
-        #loading { 
-            text-align: center; color: #666; padding: 40px 0; font-size: 16px; 
-            display: none; font-weight: bold;
-        }
+        #loading { text-align: center; color: #666; padding: 40px 0; font-size: 16px; display: none; font-weight: bold; }
         
         .image-gallery { display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; }
         .image-gallery img { width: calc(33.333% - 7px); height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
@@ -159,10 +69,8 @@
 
     <div class="layout" id="mainLayout">
         <div class="container">
-            
             <h1 class="main-title" id="mainTitle">다국어 커뮤니티 리서치 대시보드</h1>
-            
-            <div id="loading">분석 진행중...</div>
+            <div id="loading">데이터를 수집하고 AI가 분석을 진행하고 있습니다...</div>
             
             <div class="results-container" id="resultsContainer">
                 <div class="card">
@@ -174,13 +82,12 @@
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
                     
                     <div class="section-title" style="color: #555; font-size: 15px;">수집된 원본 데이터</div>
-                    <div id="rawDataText" class="raw-data"></div>
+                    <div id="rawDataContainer" class="raw-data-list"></div>
                 </div>
             </div>
 
             <div class="search-wrapper" id="searchWrapper">
                 <div class="search-box">
-                    
                     <input type="hidden" id="regionSelect" value="KR">
                     
                     <div class="custom-select" onclick="toggleDropdown(event)">
@@ -201,30 +108,24 @@
                     <button id="searchBtn" onclick="doSearch()">분석</button>
                 </div>
             </div>
-
         </div>
     </div>
 
     <script>
-        // 커스텀 드롭다운 동작 스크립트
         function toggleDropdown(event) {
             event.stopPropagation();
             document.getElementById("dropdownList").classList.toggle("select-show");
         }
 
         function selectOption(value, imgSrc) {
-            // 보이지 않는 input 값 변경 (백엔드 전송용)
             document.getElementById("regionSelect").value = value;
-            // 화면에 보이는 UI 변경
             document.getElementById("selectedRegionUI").innerHTML = `<img src="${imgSrc}" alt="${value}"> ${value}`;
         }
 
-        // 화면의 다른 곳을 클릭하면 드롭다운 닫기
         document.addEventListener("click", function() {
             document.getElementById("dropdownList").classList.remove("select-show");
         });
 
-        // 기존 검색 로직
         async function doSearch() {
             const queryInput = document.getElementById('searchInput');
             const query = queryInput.value.trim();
@@ -269,9 +170,32 @@
                     if (region === 'JP') {
                         reportContent = `[자동 번역 검색어: ${data.translated_query}]\n\n` + reportContent;
                     }
-
                     document.getElementById('reportText').innerText = reportContent;
-                    document.getElementById('rawDataText').innerText = data.raw_data;
+                    
+                    // 수집된 원본 데이터를 구글 검색결과처럼 렌더링
+                    const rawContainer = document.getElementById('rawDataContainer');
+                    rawContainer.innerHTML = ''; // 초기화
+                    
+                    if (data.raw_data_list && data.raw_data_list.length > 0) {
+                        data.raw_data_list.forEach(item => {
+                            // 구글 파비콘 추출 서비스 URL
+                            const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.site}&sz=32`;
+                            
+                            const div = document.createElement('div');
+                            div.className = 'raw-item';
+                            div.innerHTML = `
+                                <div class="raw-site-info">
+                                    <img class="raw-favicon" src="${faviconUrl}" alt="로고" onerror="this.style.display='none'">
+                                    <span class="raw-domain">${item.site}</span>
+                                </div>
+                                <a href="${item.link}" target="_blank" class="raw-title">${item.title}</a>
+                                <p class="raw-snippet">${item.snippet}</p>
+                            `;
+                            rawContainer.appendChild(div);
+                        });
+                    } else {
+                        rawContainer.innerHTML = '<p style="color:#666;">수집된 데이터가 없습니다.</p>';
+                    }
                     
                     document.getElementById('loading').style.display = 'none';
                     document.getElementById('resultsContainer').style.display = 'block';

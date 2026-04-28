@@ -15,7 +15,6 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# [추가됨] 한국어 검색어를 일본어로 번역하는 함수
 def translate_to_jp(query):
     client = OpenAI(api_key=OPENAI_API_KEY)
     try:
@@ -30,7 +29,7 @@ def translate_to_jp(query):
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"번역 에러: {e}")
-        return query # 실패 시 원본 검색어 사용
+        return query
 
 def fetch_top_images(query):
     url = "https://google.serper.dev/images"
@@ -50,8 +49,10 @@ def fetch_top_images(query):
         
     return image_urls
 
+# 파비콘 처리를 위해 리스트 데이터 추가 반환
 def fetch_community_data(query, sites):
     all_context = ""
+    raw_list = []
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
 
@@ -62,10 +63,23 @@ def fetch_community_data(query, sites):
             items = response.json().get('organic', [])
             if items:
                 for item in items:
-                    all_context += f"제목: {item.get('title')}\n내용: {item.get('snippet')}\n\n"
+                    title = item.get('title', '제목 없음')
+                    snippet = item.get('snippet', '내용 없음')
+                    link = item.get('link', '#')
+                    
+                    all_context += f"제목: {title}\n내용: {snippet}\n\n"
+                    
+                    # 프론트엔드에서 파비콘을 그릴 수 있게 개별 객체로 저장
+                    raw_list.append({
+                        "site": site,
+                        "title": title,
+                        "snippet": snippet,
+                        "link": link
+                    })
         except Exception:
             continue
-    return all_context
+            
+    return all_context, raw_list
 
 def generate_core_summary(context_text):
     if not context_text:
@@ -98,12 +112,11 @@ def generate_core_summary(context_text):
 def search_handler():
     data = request.json
     query = data.get("query", "")
-    region = data.get("region", "KR") # 프론트엔드에서 보낸 국가 정보 받기
+    region = data.get("region", "KR")
     
     if not query:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
         
-    # [추가됨] 국가별 설정 분기
     if region == "JP":
         search_query = translate_to_jp(query)
         target_sites = ["5ch.net", "x.com", "youtube.com"]
@@ -111,16 +124,16 @@ def search_handler():
         search_query = query
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
-    # 번역된 키워드(또는 원본)로 이미지 및 데이터 수집
     images = fetch_top_images(search_query)
-    collected_context = fetch_community_data(search_query, target_sites)
     
-    # 요약은 항상 한국어로 생성
+    # 두 개의 반환값 받기
+    collected_context, raw_list = fetch_community_data(search_query, target_sites)
+    
     final_report = generate_core_summary(collected_context)
     
     return jsonify({
         "images": images,
         "report": final_report,
-        "raw_data": collected_context,
-        "translated_query": search_query # 어떻게 번역되었는지 확인하기 위해 추가
+        "raw_data_list": raw_list,  # 프론트엔드로 구조화된 리스트 전송
+        "translated_query": search_query
     })
