@@ -15,7 +15,23 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# 검색어 기반 상위 3개 이미지 가져오기
+# [추가됨] 한국어 검색어를 일본어로 번역하는 함수
+def translate_to_jp(query):
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "사용자의 한국어 검색어를 일본어로 번역하세요. 설명이나 따옴표 없이 번역된 결과(일본어)만 출력하세요."},
+                {"role": "user", "content": query}
+            ],
+            temperature=0.3
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"번역 에러: {e}")
+        return query # 실패 시 원본 검색어 사용
+
 def fetch_top_images(query):
     url = "https://google.serper.dev/images"
     payload = json.dumps({"q": query, "gl": "kr", "hl": "ko", "num": 3})
@@ -57,11 +73,12 @@ def generate_core_summary(context_text):
     
     client = OpenAI(api_key=OPENAI_API_KEY)
     system_prompt = """
-    당신은 수많은 커뮤니티 반응을 하나로 꿰뚫어 보는 전문 분석가입니다.
+    당신은 수많은 다국어 커뮤니티 반응을 하나로 꿰뚫어 보는 전문 분석가입니다.
     제공된 검색 결과들을 종합하여 핵심 여론을 분석하세요.
-    1. 사이트별 구분 없이 통합 분석
-    2. 번호 매기지 않음
-    3. 딱 3줄 정도로 핵심만 명확하게 작성
+    1. 원본 데이터가 외국어라도 반드시 '한국어'로 작성할 것
+    2. 사이트별 구분 없이 통합 분석
+    3. 번호 매기지 않음
+    4. 딱 3줄 정도로 핵심만 명확하게 작성
     """
     
     try:
@@ -81,18 +98,29 @@ def generate_core_summary(context_text):
 def search_handler():
     data = request.json
     query = data.get("query", "")
+    region = data.get("region", "KR") # 프론트엔드에서 보낸 국가 정보 받기
     
     if not query:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
         
-    target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
+    # [추가됨] 국가별 설정 분기
+    if region == "JP":
+        search_query = translate_to_jp(query)
+        target_sites = ["5ch.net", "x.com", "youtube.com"]
+    else:
+        search_query = query
+        target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
-    images = fetch_top_images(query)
-    collected_context = fetch_community_data(query, target_sites)
+    # 번역된 키워드(또는 원본)로 이미지 및 데이터 수집
+    images = fetch_top_images(search_query)
+    collected_context = fetch_community_data(search_query, target_sites)
+    
+    # 요약은 항상 한국어로 생성
     final_report = generate_core_summary(collected_context)
     
     return jsonify({
         "images": images,
         "report": final_report,
-        "raw_data": collected_context
+        "raw_data": collected_context,
+        "translated_query": search_query # 어떻게 번역되었는지 확인하기 위해 추가
     })

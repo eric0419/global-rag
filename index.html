@@ -5,185 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global Echo RAG</title>
     <style>
-        /* 모든 요소에 box-sizing 적용하여 스크롤 밀림 방지 */
         * { box-sizing: border-box; }
         
         body, html { 
-            height: 100%; 
-            margin: 0; 
-            font-family: 'Pretendard', -apple-system, sans-serif; 
-            background-color: #f4f7f6; 
-            color: #333; 
+            height: 100%; margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; 
+            background-color: #f4f7f6; color: #333; 
         }
         
-        /* 좌측 상단 로고 (파란색 테마) */
         .top-logo { 
-            position: absolute; 
-            top: 24px; 
-            left: 24px; 
-            font-weight: bold; 
-            font-size: 18px; 
-            color: #1a73e8; 
-            z-index: 10;
+            position: absolute; top: 24px; left: 24px; font-weight: bold; 
+            font-size: 18px; color: #1a73e8; z-index: 10;
         }
         
-        /* 메인 레이아웃 (스크롤이 생기지 않도록 min-height 설정) */
         .layout { 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            justify-content: center; /* 초기 상태: 수직 중앙 정렬 */
-            min-height: 100vh; 
-            padding: 80px 20px 40px 20px; 
-            transition: all 0.4s ease; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            min-height: 100vh; padding: 80px 20px 40px 20px; transition: all 0.4s ease; 
         }
         
-        /* 검색 후 레이아웃 상태 */
         .layout.searched { 
-            justify-content: flex-start; /* 상단 정렬로 변경 */
-            padding-top: 100px;
-            padding-bottom: 120px; /* 하단 고정 검색창에 가려지지 않게 여백 확보 */
+            justify-content: flex-start; padding-top: 100px; padding-bottom: 120px; 
         }
         
-        /* 중앙 컨테이너 */
-        .container { 
-            width: 100%; 
-            max-width: 800px; 
-            position: relative; 
-        }
+        .container { width: 100%; max-width: 800px; position: relative; }
         
-        /* 메인 타이틀 */
         .main-title { 
-            text-align: center; 
-            font-size: 32px; 
-            font-weight: bold; 
-            color: #1a73e8; 
-            margin-bottom: 30px; 
+            text-align: center; font-size: 32px; font-weight: bold; 
+            color: #1a73e8; margin-bottom: 30px; 
         }
         
-        /* 검색창 래퍼 (초기: 중앙 타이틀 아래, 검색 후: 하단 고정) */
-        .search-wrapper { 
-            width: 100%; 
-            transition: all 0.4s ease; 
-        }
+        .search-wrapper { width: 100%; transition: all 0.4s ease; }
         
         .layout.searched .search-wrapper { 
-            position: fixed; 
-            bottom: 30px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            max-width: 800px; 
-            padding: 0 20px; 
-            z-index: 100; 
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); 
+            max-width: 800px; padding: 0 20px; z-index: 100; 
         }
         
-        /* 검색창 디자인 */
         .search-box { 
-            display: flex; 
-            gap: 10px; 
-            background: #ffffff; 
-            padding: 10px 10px 10px 20px; 
-            border-radius: 30px; 
-            border: 1px solid #ddd; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05); 
-            transition: 0.2s;
+            display: flex; align-items: center; gap: 10px; background: #ffffff; 
+            padding: 10px 10px 10px 20px; border-radius: 30px; border: 1px solid #ddd; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s;
         }
         
-        .search-box:focus-within { 
-            border-color: #1a73e8; 
-            box-shadow: 0 4px 15px rgba(26,115,232,0.15); 
+        .search-box:focus-within { border-color: #1a73e8; box-shadow: 0 4px 15px rgba(26,115,232,0.15); }
+        
+        /* 국가 선택 드롭다운 스타일 */
+        .region-select {
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            font-weight: 600;
+            outline: none;
+            cursor: pointer;
+            padding-right: 15px;
+            border-right: 1px solid #eee;
+            color: #333;
         }
         
         input { 
-            flex: 1; 
-            border: none; 
-            padding: 10px 0; 
-            font-size: 16px; 
-            outline: none; 
-            background: transparent; 
+            flex: 1; border: none; padding: 10px 0; font-size: 16px; 
+            outline: none; background: transparent; 
         }
         
         button { 
-            padding: 12px 25px; 
-            background-color: #1a73e8; 
-            color: white; 
-            border: none; 
-            border-radius: 20px; 
-            cursor: pointer; 
-            font-size: 16px; 
-            font-weight: bold; 
-            transition: 0.2s; 
+            padding: 12px 25px; background-color: #1a73e8; color: white; border: none; 
+            border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; 
         }
         
         button:hover { background-color: #1557b0; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         
-        /* 결과 영역 */
-        .results-container { 
-            display: none; 
-            width: 100%; 
-            animation: fadeIn 0.5s ease forwards; 
-        }
+        .results-container { display: none; width: 100%; animation: fadeIn 0.5s ease forwards; }
         
-        /* 카드 디자인 */
         .card { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 16px; 
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); 
-            line-height: 1.6; 
+            background: white; padding: 30px; border-radius: 16px; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); line-height: 1.6; 
         }
         
-        .section-title { 
-            font-size: 18px; 
-            font-weight: bold; 
-            margin-bottom: 15px; 
-            color: #1a73e8; 
-        }
+        .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1a73e8; }
         
         .report-text { font-size: 16px; color: #333; }
         
         .raw-data { 
-            font-size: 13px; 
-            color: #666; 
-            background: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 8px; 
-            max-height: 300px; 
-            overflow-y: auto; 
-            white-space: pre-wrap; 
-            border: 1px solid #eee; 
+            font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; 
+            border-radius: 8px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; border: 1px solid #eee; 
         }
         
         #loading { 
-            text-align: center; 
-            color: #666; 
-            padding: 40px 0; 
-            font-size: 16px; 
-            display: none; 
-            font-weight: bold;
+            text-align: center; color: #666; padding: 40px 0; font-size: 16px; 
+            display: none; font-weight: bold;
         }
         
-        /* 이미지 갤러리 */
-        .image-gallery { 
-            display: flex; 
-            gap: 10px; 
-            margin-bottom: 30px; 
-            justify-content: center; 
-        }
-        
-        .image-gallery img { 
-            width: calc(33.333% - 7px); 
-            height: 140px; 
-            object-fit: cover; 
-            border-radius: 8px; 
-            border: 1px solid #eee; 
-        }
+        .image-gallery { display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; }
+        .image-gallery img { width: calc(33.333% - 7px); height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
 
-        @keyframes fadeIn { 
-            from { opacity: 0; transform: translateY(10px); } 
-            to { opacity: 1; transform: translateY(0); } 
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
@@ -213,7 +128,11 @@
 
             <div class="search-wrapper" id="searchWrapper">
                 <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요 (예: 체인소맨 결말 반응)" onkeypress="if(event.key === 'Enter') doSearch()">
+                    <select id="regionSelect" class="region-select">
+                        <option value="KR">🇰🇷 KR</option>
+                        <option value="JP">🇯🇵 JP</option>
+                    </select>
+                    <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요" onkeypress="if(event.key === 'Enter') doSearch()">
                     <button id="searchBtn" onclick="doSearch()">분석</button>
                 </div>
             </div>
@@ -225,15 +144,14 @@
         async function doSearch() {
             const queryInput = document.getElementById('searchInput');
             const query = queryInput.value.trim();
+            const region = document.getElementById('regionSelect').value;
             const searchBtn = document.getElementById('searchBtn');
             
             if (!query) return alert('검색어를 입력하세요.');
 
-            // 레이아웃 상태 변경 (타이틀 숨김, 검색창 하단 이동)
             document.getElementById('mainTitle').style.display = 'none';
             document.getElementById('mainLayout').classList.add('searched');
             
-            // 기존 결과 숨기기 및 로딩 표시
             document.getElementById('resultsContainer').style.display = 'none';
             document.getElementById('loading').style.display = 'block';
             searchBtn.disabled = true;
@@ -242,7 +160,7 @@
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query })
+                    body: JSON.stringify({ query: query, region: region }) // 국가 정보 추가 전송
                 });
 
                 const data = await response.json();
@@ -263,7 +181,13 @@
                         gallery.style.display = 'none';
                     }
 
-                    document.getElementById('reportText').innerText = data.report;
+                    // 리포트 텍스트 구성 (번역된 키워드 안내 추가 가능)
+                    let reportContent = data.report;
+                    if (region === 'JP') {
+                        reportContent = `[자동 번역 검색어: ${data.translated_query}]\n\n` + reportContent;
+                    }
+
+                    document.getElementById('reportText').innerText = reportContent;
                     document.getElementById('rawDataText').innerText = data.raw_data;
                     
                     document.getElementById('loading').style.display = 'none';
