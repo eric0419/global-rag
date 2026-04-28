@@ -140,18 +140,15 @@
             document.getElementById("dropdownList").classList.remove("select-show");
         });
         
-        // 번역 요청 함수
         async function translateText(btnElement, textToTranslate) {
             const container = btnElement.nextElementSibling;
             
-            // 이미 번역이 완료되어 열려있다면 닫기
             if (container.style.display === 'block') {
                 container.style.display = 'none';
                 btnElement.innerText = '번역 보기';
                 return;
             }
 
-            // 번역된 텍스트가 이미 캐싱되어 있다면 API 호출 없이 바로 열기
             if (container.dataset.translated === 'true') {
                 container.style.display = 'block';
                 btnElement.innerText = '번역 닫기';
@@ -239,15 +236,21 @@
                     if (data.raw_data_list && data.raw_data_list.length > 0) {
                         data.raw_data_list.forEach(item => {
                             const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.site}&sz=32`;
-                            // 날짜가 존재하면 출력, 없으면 빈 문자열
                             const dateHtml = item.date ? `<span class="raw-date">${item.date}</span>` : '';
                             
                             const div = document.createElement('div');
                             div.className = 'raw-item';
-                            // 버튼 클릭 시 제목과 요약문을 합쳐서 번역 요청
                             const textToTranslate = `제목: ${item.title}\n내용: ${item.snippet}`;
-                            // 따옴표 등의 충돌을 막기 위해 텍스트 인코딩 처리
                             const safeText = encodeURIComponent(textToTranslate);
+                            
+                            // region이 JP일 때만 번역 버튼 UI를 생성하도록 분기 처리
+                            let translateHtml = '';
+                            if (region === 'JP') {
+                                translateHtml = `
+                                    <button class="translate-btn" onclick="translateText(this, decodeURIComponent('${safeText}'))">번역 보기</button>
+                                    <div class="translated-text" data-translated="false"></div>
+                                `;
+                            }
                             
                             div.innerHTML = `
                                 <div class="raw-header">
@@ -259,8 +262,7 @@
                                 </div>
                                 <a href="${item.link}" target="_blank" class="raw-title">${item.title}</a>
                                 <p class="raw-snippet">${item.snippet}</p>
-                                <button class="translate-btn" onclick="translateText(this, decodeURIComponent('${safeText}'))">번역 보기</button>
-                                <div class="translated-text" data-translated="false"></div>
+                                ${translateHtml}
                             `;
                             rawContainer.appendChild(div);
                         });
