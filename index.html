@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Echo RAG</title>
+    <style>
+        body { font-family: 'Pretendard', -apple-system, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 50px 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 600px; }
+        h1 { text-align: center; color: #1a73e8; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 30px; }
+        input { flex: 1; padding: 15px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; outline: none; }
+        button { padding: 15px 25px; background-color: #1a73e8; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; }
+        button:hover { background-color: #1557b0; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; display: none; line-height: 1.6; }
+        #loading { text-align: center; display: none; color: #666; margin-top: 20px; font-weight: bold; }
+        .raw-data { font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; border-radius: 8px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Global Echo RAG 🌐</h1>
+        
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="예: 체인소맨 결말 반응" onkeypress="if(event.key === 'Enter') doSearch()">
+            <button onclick="doSearch()">분석하기</button>
+        </div>
+
+        <div id="loading">🤖 5대 커뮤니티의 데이터를 긁어와 AI가 분석 중입니다... (약 10초 소요)</div>
+
+        <div class="card" id="resultCard">
+            <h3 style="margin-top:0; color: #1a73e8;">✨ 3줄 요약 리포트</h3>
+            <p id="reportText"></p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+            <h4 style="margin:0 0 10px 0; color: #555;">수집된 원본 데이터 (미리보기)</h4>
+            <div id="rawDataText" class="raw-data"></div>
+        </div>
+    </div>
+
+    <script>
+        async function doSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return alert('검색어를 입력하세요!');
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('resultCard').style.display = 'none';
+
+            try {
+                // 파이썬 백엔드로 데이터 요청
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('reportText').innerText = data.report;
+                    document.getElementById('rawDataText').innerText = data.raw_data;
+                    document.getElementById('resultCard').style.display = 'block';
+                } else {
+                    alert('에러 발생: ' + data.error);
+                }
+            } catch (error) {
+                alert('서버와 통신할 수 없습니다.');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+    </script>
+
+</body>
+</html>
