@@ -44,12 +44,11 @@ def fetch_top_images(query):
         
         for item in items[:3]:
             image_urls.append(item.get('imageUrl'))
-    except Exception as e:
-        print(f"이미지 검색 에러: {e}")
+    except Exception:
+        pass
         
     return image_urls
 
-# 파비콘 처리를 위해 리스트 데이터 추가 반환
 def fetch_community_data(query, sites):
     all_context = ""
     raw_list = []
@@ -66,15 +65,16 @@ def fetch_community_data(query, sites):
                     title = item.get('title', '제목 없음')
                     snippet = item.get('snippet', '내용 없음')
                     link = item.get('link', '#')
+                    date = item.get('date', '') # 날짜 데이터 추출 시도
                     
                     all_context += f"제목: {title}\n내용: {snippet}\n\n"
                     
-                    # 프론트엔드에서 파비콘을 그릴 수 있게 개별 객체로 저장
                     raw_list.append({
                         "site": site,
                         "title": title,
                         "snippet": snippet,
-                        "link": link
+                        "link": link,
+                        "date": date
                     })
         except Exception:
             continue
@@ -125,15 +125,36 @@ def search_handler():
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
     images = fetch_top_images(search_query)
-    
-    # 두 개의 반환값 받기
     collected_context, raw_list = fetch_community_data(search_query, target_sites)
-    
     final_report = generate_core_summary(collected_context)
     
     return jsonify({
         "images": images,
         "report": final_report,
-        "raw_data_list": raw_list,  # 프론트엔드로 구조화된 리스트 전송
+        "raw_data_list": raw_list,
         "translated_query": search_query
     })
+
+# 원본 데이터 번역을 위한 새로운 API 엔드포인트
+@app.route('/api/translate', methods=['POST'])
+def translate_snippet():
+    data = request.json
+    text_to_translate = data.get("text", "")
+    
+    if not text_to_translate:
+        return jsonify({"translated_text": "번역할 텍스트가 없습니다."})
+        
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "다음 텍스트를 자연스러운 한국어로 번역하세요. 다른 부가 설명 없이 번역된 텍스트만 출력하세요."},
+                {"role": "user", "content": text_to_translate}
+            ],
+            temperature=0.3
+        )
+        translated_text = response.choices[0].message.content.strip()
+        return jsonify({"translated_text": translated_text})
+    except Exception as e:
+        return jsonify({"translated_text": f"번역 실패: {e}"}), 500
