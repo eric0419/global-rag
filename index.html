@@ -28,7 +28,23 @@
         .select-selected { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #333; padding: 5px; }
         .select-selected img { width: 24px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .select-selected::after { content: '▼'; font-size: 10px; margin-left: 5px; color: #888; }
-        .select-items { position: absolute; top: 130%; left: 0; background-color: #fff; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); width: 110px; z-index: 101; display: none; flex-direction: column; overflow: hidden; }
+        
+        /* 선택창이 위로 열리도록 bottom 속성 수정 */
+        .select-items { 
+            position: absolute; 
+            bottom: 130%; /* 위쪽 방향으로 배치 */
+            left: 0; 
+            background-color: #fff; 
+            border: 1px solid #ddd; 
+            border-radius: 12px; 
+            box-shadow: 0 -4px 12px rgba(0,0,0,0.1); /* 그림자도 위쪽으로 설정 */
+            width: 110px; 
+            z-index: 101; 
+            display: none; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        
         .select-items div { display: flex; align-items: center; gap: 10px; padding: 12px 15px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
         .select-items div:hover { background-color: #f4f7f6; }
         .select-items img { width: 24px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
@@ -44,7 +60,6 @@
         .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1a73e8; }
         .report-text { font-size: 16px; color: #333; }
         
-        /* 파비콘이 적용된 원본 데이터 리스트 스타일 */
         .raw-data-list { display: flex; flex-direction: column; gap: 15px; max-height: 400px; overflow-y: auto; padding-right: 10px; }
         .raw-item { background: #f8f9fa; border: 1px solid #eee; border-radius: 8px; padding: 15px; transition: transform 0.1s; }
         .raw-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
@@ -55,6 +70,7 @@
         .raw-title:hover { text-decoration: underline; }
         .raw-snippet { font-size: 13px; color: #4d5156; margin: 0; line-height: 1.5; }
         
+        /* 로딩 문구 고정 */
         #loading { text-align: center; color: #666; padding: 40px 0; font-size: 16px; display: none; font-weight: bold; }
         
         .image-gallery { display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; }
@@ -70,7 +86,8 @@
     <div class="layout" id="mainLayout">
         <div class="container">
             <h1 class="main-title" id="mainTitle">다국어 커뮤니티 리서치 대시보드</h1>
-            <div id="loading">데이터를 수집하고 AI가 분석을 진행하고 있습니다...</div>
+            
+            <div id="loading">분석 진행중...</div>
             
             <div class="results-container" id="resultsContainer">
                 <div class="card">
@@ -172,15 +189,12 @@
                     }
                     document.getElementById('reportText').innerText = reportContent;
                     
-                    // 수집된 원본 데이터를 구글 검색결과처럼 렌더링
                     const rawContainer = document.getElementById('rawDataContainer');
-                    rawContainer.innerHTML = ''; // 초기화
+                    rawContainer.innerHTML = ''; 
                     
                     if (data.raw_data_list && data.raw_data_list.length > 0) {
                         data.raw_data_list.forEach(item => {
-                            // 구글 파비콘 추출 서비스 URL
                             const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.site}&sz=32`;
-                            
                             const div = document.createElement('div');
                             div.className = 'raw-item';
                             div.innerHTML = `
