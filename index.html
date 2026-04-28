@@ -42,27 +42,79 @@
         
         .search-box { 
             display: flex; align-items: center; gap: 10px; background: #ffffff; 
-            padding: 10px 10px 10px 20px; border-radius: 30px; border: 1px solid #ddd; 
+            padding: 10px 10px 10px 15px; border-radius: 30px; border: 1px solid #ddd; 
             box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s;
         }
         
         .search-box:focus-within { border-color: #1a73e8; box-shadow: 0 4px 15px rgba(26,115,232,0.15); }
         
-        /* 국가 선택 드롭다운 스타일 */
-        .region-select {
-            border: none;
-            background: transparent;
+        /* --- 새로 추가된 커스텀 드롭다운 CSS --- */
+        .custom-select {
+            position: relative;
+            display: flex;
+            align-items: center;
+            border-right: 1px solid #eee;
+            padding-right: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .select-selected {
+            display: flex;
+            align-items: center;
+            gap: 8px;
             font-size: 16px;
             font-weight: 600;
-            outline: none;
-            cursor: pointer;
-            padding-right: 15px;
-            border-right: 1px solid #eee;
             color: #333;
+            padding: 5px;
         }
+        .select-selected img {
+            width: 24px;
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .select-selected::after {
+            content: '▼';
+            font-size: 10px;
+            margin-left: 5px;
+            color: #888;
+        }
+        .select-items {
+            position: absolute;
+            top: 130%;
+            left: 0;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 110px;
+            z-index: 101;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .select-items div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .select-items div:hover {
+            background-color: #f4f7f6;
+        }
+        .select-items img {
+            width: 24px;
+            border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .select-show { display: flex; }
+        /* --------------------------------------- */
         
         input { 
-            flex: 1; border: none; padding: 10px 0; font-size: 16px; 
+            flex: 1; border: none; padding: 10px 5px; font-size: 16px; 
             outline: none; background: transparent; 
         }
         
@@ -110,7 +162,7 @@
             
             <h1 class="main-title" id="mainTitle">다국어 커뮤니티 리서치 대시보드</h1>
             
-            <div id="loading">데이터를 수집하고 AI가 분석을 진행하고 있습니다...</div>
+            <div id="loading">분석 진행중...</div>
             
             <div class="results-container" id="resultsContainer">
                 <div class="card">
@@ -128,10 +180,23 @@
 
             <div class="search-wrapper" id="searchWrapper">
                 <div class="search-box">
-                    <select id="regionSelect" class="region-select">
-                        <option value="KR">🇰🇷 KR</option>
-                        <option value="JP">🇯🇵 JP</option>
-                    </select>
+                    
+                    <input type="hidden" id="regionSelect" value="KR">
+                    
+                    <div class="custom-select" onclick="toggleDropdown(event)">
+                        <div class="select-selected" id="selectedRegionUI">
+                            <img src="https://flagcdn.com/w40/kr.png" alt="KR"> KR
+                        </div>
+                        <div class="select-items" id="dropdownList">
+                            <div onclick="selectOption('KR', 'https://flagcdn.com/w40/kr.png')">
+                                <img src="https://flagcdn.com/w40/kr.png" alt="KR"> KR
+                            </div>
+                            <div onclick="selectOption('JP', 'https://flagcdn.com/w40/jp.png')">
+                                <img src="https://flagcdn.com/w40/jp.png" alt="JP"> JP
+                            </div>
+                        </div>
+                    </div>
+
                     <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요" onkeypress="if(event.key === 'Enter') doSearch()">
                     <button id="searchBtn" onclick="doSearch()">분석</button>
                 </div>
@@ -141,6 +206,25 @@
     </div>
 
     <script>
+        // 커스텀 드롭다운 동작 스크립트
+        function toggleDropdown(event) {
+            event.stopPropagation();
+            document.getElementById("dropdownList").classList.toggle("select-show");
+        }
+
+        function selectOption(value, imgSrc) {
+            // 보이지 않는 input 값 변경 (백엔드 전송용)
+            document.getElementById("regionSelect").value = value;
+            // 화면에 보이는 UI 변경
+            document.getElementById("selectedRegionUI").innerHTML = `<img src="${imgSrc}" alt="${value}"> ${value}`;
+        }
+
+        // 화면의 다른 곳을 클릭하면 드롭다운 닫기
+        document.addEventListener("click", function() {
+            document.getElementById("dropdownList").classList.remove("select-show");
+        });
+
+        // 기존 검색 로직
         async function doSearch() {
             const queryInput = document.getElementById('searchInput');
             const query = queryInput.value.trim();
@@ -160,7 +244,7 @@
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, region: region }) // 국가 정보 추가 전송
+                    body: JSON.stringify({ query: query, region: region })
                 });
 
                 const data = await response.json();
@@ -181,7 +265,6 @@
                         gallery.style.display = 'none';
                     }
 
-                    // 리포트 텍스트 구성 (번역된 키워드 안내 추가 가능)
                     let reportContent = data.report;
                     if (region === 'JP') {
                         reportContent = `[자동 번역 검색어: ${data.translated_query}]\n\n` + reportContent;
