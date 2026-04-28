@@ -1,8 +1,13 @@
 import requests
 import json
+import os 
 from openai import OpenAI
+from dotenv import load_dotenv
+load_dotenv()
 
-# --- API 키 세팅 ---
+SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
 
 def fetch_community_data(query, sites):
     all_context = ""
