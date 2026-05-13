@@ -121,25 +121,30 @@ def parse_date(date_str):
         pass
     return datetime.min
 
-# --- 핵심 수정: 전체 긁어온 뒤 가중치로 필터링 ---
+# --- 가중치 기반 수집 ---
 def fetch_community_data_weighted(query, sites):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
     TOTAL_TARGET = 15
 
-    # 1단계: 모든 사이트에서 num=10으로 최대한 수집 + totalResults 파악
     site_buckets = []
     total_mentions = 0
+
+    print(f"\n========== 검색 시작: '{query}' ==========") # 시작 로그
 
     for site in sites:
         payload = json.dumps({
             "q": f"site:{site} {query}",
             "gl": "kr", "hl": "ko",
-            "num": 10  # 항상 최대로 요청
+            "num": 10
         })
         try:
             res = requests.post(url, headers=headers, data=payload).json()
-            count = int(res.get('searchInformation', {}).get('totalResults', 0) or 0)
+            
+            # [버그 수정] 콤마(,) 제거 후 숫자로 변환
+            raw_count = res.get('searchInformation', {}).get('totalResults', "0")
+            count = int(str(raw_count).replace(',', ''))
+            
             items = res.get('organic', [])
 
             site_buckets.append({
@@ -148,10 +153,14 @@ def fetch_community_data_weighted(query, sites):
                 "items": items
             })
             total_mentions += count
-        except Exception:
+            print(f"[API 호출 성공] {site} -> 언급량: {count}개, 가져온 글: {len(items)}개") # 개별 사이트 로그
+            
+        except Exception as e:
+            print(f"[API 호출 에러] {site} -> {e}") # 에러 로그
             site_buckets.append({"site": site, "count": 0, "items": []})
 
-    # 2단계: totalResults 비율로 각 사이트에서 몇 개 포함할지 결정 후 슬라이싱
+    print(f"--- 전체 누적 언급량: {total_mentions}개 ---") # 총계 로그
+
     raw_list = []
 
     for bucket in site_buckets:
@@ -162,10 +171,10 @@ def fetch_community_data_weighted(query, sites):
         if total_mentions > 0 and count > 0:
             keep = max(1, round((count / total_mentions) * TOTAL_TARGET))
         else:
-            # 언급량 데이터가 없으면 균등 배분
             keep = max(1, TOTAL_TARGET // len(sites))
 
-        # 실제 수집된 것 중에서 keep개만 선택
+        print(f"[분배 결과] {site}: 전체 {len(items)}개 중 -> {keep}개 채택") # 분배 결과 로그
+
         for entry in items[:keep]:
             raw_list.append({
                 "site": site,
@@ -176,20 +185,17 @@ def fetch_community_data_weighted(query, sites):
                 "dt_object": parse_date(entry.get('date', ''))
             })
 
-    # 3단계: 최신순 정렬
     raw_list.sort(key=lambda x: x['dt_object'], reverse=True)
 
-    # 4단계: 요약용 컨텍스트 생성 + dt_object 제거
     all_context = ""
     for entry in raw_list:
         all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
         del entry['dt_object']
 
-    # 언급량 통계도 함께 반환 (차트용)
     site_stats = [{"site": b["site"], "count": b["count"]} for b in site_buckets]
 
+    print("========== 검색 완료 ==========\n") # 종료 로그
     return all_context, raw_list, site_stats
-
 
 @app.route('/api/search', methods=['POST'])
 def search_handler():
@@ -218,10 +224,9 @@ def search_handler():
         "images": images,
         "report": final_report,
         "raw_data_list": raw_list,
-        "site_stats": site_stats,       # 언급량 차트용 데이터 (프론트엔드에서 선택적으로 활용)
+        "site_stats": site_stats,
         "translated_query": search_query
     })
-
 
 @app.route('/api/translate', methods=['POST'])
 def translate_snippet():
