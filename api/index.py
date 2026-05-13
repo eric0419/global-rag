@@ -52,13 +52,16 @@ def translate_to_en(query):
         return query
 
 # --- 이미지 검색 ---
-def fetch_top_images(query):
+def fetch_top_images(query, tbs=""):
     url = "https://google.serper.dev/images"
-    payload = json.dumps({"q": query, "gl": "kr", "hl": "ko", "num": 3})
+    payload_dict = {"q": query, "gl": "kr", "hl": "ko", "num": 3}
+    if tbs:
+        payload_dict["tbs"] = tbs
+    
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     image_urls = []
     try:
-        response = requests.post(url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=json.dumps(payload_dict))
         response.raise_for_status()
         items = response.json().get('images', [])
         for item in items[:3]:
@@ -124,24 +127,26 @@ def extract_root_domain(url):
         return ''
 
 # --- 페이지네이션으로 최대 40개 수집 ---
-def fetch_paginated(query, gl="kr", hl="ko", target=40):
+def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
     all_items = []
     page = 1
 
     while len(all_items) < target:
-        payload = json.dumps({
+        payload_dict = {
             "q": query,
             "gl": gl, "hl": hl,
             "num": 10,
             "page": page
-        })
+        }
+        if tbs:  # 기간 설정이 있으면 파라미터 추가
+            payload_dict["tbs"] = tbs
+            
         try:
-            res = requests.post(url, headers=headers, data=payload).json()
+            res = requests.post(url, headers=headers, data=json.dumps(payload_dict)).json()
             items = res.get('organic', [])
             if not items:
-                # 더 이상 결과 없음
                 break
             all_items.extend(items)
             print(f"[페이지네이션] page={page} → {len(items)}개 수신 (누적 {len(all_items)}개)")
@@ -153,11 +158,9 @@ def fetch_paginated(query, gl="kr", hl="ko", target=40):
     return all_items[:target]
 
 
-# -------------------------------------------------------------------
-# 방식 A: site 없이 페이지네이션으로 40개 수집 후 도메인 분류
-# -------------------------------------------------------------------
-def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko"):
-    all_items = fetch_paginated(query, gl=gl, hl=hl, target=40)
+# --- 방식 A: site 없이 페이지네이션으로 40개 수집 후 도메인 분류 ---
+def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko", tbs=""):
+    all_items = fetch_paginated(query, gl=gl, hl=hl, tbs=tbs, target=40)
     print(f"[방식A] 총 {len(all_items)}개 수신")
 
     target_root_domains = {site: extract_root_domain(site) for site in target_sites}
@@ -194,19 +197,20 @@ def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko"):
     return raw_list, site_counts, other_count
 
 
-# -------------------------------------------------------------------
-# 방식 B: site: 개별 호출 (각 사이트 3개씩 균등, 최신순)
-# -------------------------------------------------------------------
-def fetch_by_site_search(query, target_sites, gl="kr", hl="ko"):
+# --- 방식 B: site: 개별 호출 (각 사이트 3개씩 균등, 최신순) ---
+def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
     site_counts = {}
     raw_list = []
 
     for site in target_sites:
-        payload = json.dumps({"q": f"site:{site} {query}", "gl": gl, "hl": hl, "num": 3})
+        payload_dict = {"q": f"site:{site} {query}", "gl": gl, "hl": hl, "num": 3}
+        if tbs:
+            payload_dict["tbs"] = tbs
+            
         try:
-            res = requests.post(url, headers=headers, data=payload).json()
+            res = requests.post(url, headers=headers, data=json.dumps(payload_dict)).json()
             items = res.get('organic', [])
             site_counts[site] = len(items)
             print(f"[방식B] {site}: {len(items)}개")
@@ -230,14 +234,12 @@ def fetch_by_site_search(query, target_sites, gl="kr", hl="ko"):
     return raw_list, site_counts
 
 
-# -------------------------------------------------------------------
-# 통합 진입점: 방식A 시도 → 결과 부족 시 방식B로 전환
-# -------------------------------------------------------------------
-def fetch_community_data(query, target_sites, gl="kr", hl="ko"):
-    print(f"\n========== 검색 시작: '{query}' ==========")
+# --- 통합 진입점: 방식A 시도 → 결과 부족 시 방식B로 전환 ---
+def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
+    print(f"\n========== 검색 시작: '{query}' (기간: {tbs if tbs else '전체'}) ==========")
 
     # 1단계: 방식A 시도 (페이지네이션 40개)
-    raw_list, site_counts, other_count = fetch_by_broad_search(query, target_sites, gl=gl, hl=hl)
+    raw_list, site_counts, other_count = fetch_by_broad_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
     total_community = sum(site_counts.values())
 
     if total_community >= COMMUNITY_THRESHOLD:
@@ -246,8 +248,7 @@ def fetch_community_data(query, target_sites, gl="kr", hl="ko"):
         site_stats.append({"site": "기타", "count": other_count})
     else:
         print(f"[전략] 방식B로 전환 (커뮤니티 글 {total_community}개 < 기준 {COMMUNITY_THRESHOLD}개)")
-        raw_list, site_counts = fetch_by_site_search(query, target_sites, gl=gl, hl=hl)
-        # 방식B는 기타 없음
+        raw_list, site_counts = fetch_by_site_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
         site_stats = [{"site": site, "count": site_counts.get(site, 0)} for site in target_sites]
 
     # 컨텍스트 생성
@@ -266,6 +267,7 @@ def search_handler():
     data = request.json
     query = data.get("query", "")
     region = data.get("region", "KR")
+    tbs = data.get("tbs", "qdr:w")  # 프론트에서 넘어온 날짜 필터 (기본값: 최근 1주)
 
     if not query:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
@@ -283,8 +285,8 @@ def search_handler():
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
         gl, hl = "kr", "ko"
 
-    images = fetch_top_images(search_query)
-    collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl)
+    images = fetch_top_images(search_query, tbs=tbs)
+    collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     final_report = generate_core_summary(collected_context)
 
     return jsonify({
