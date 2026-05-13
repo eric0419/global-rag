@@ -15,20 +15,36 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
+# 한국어 검색어를 일본어로 번역
 def translate_to_jp(query):
     client = OpenAI(api_key=OPENAI_API_KEY)
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "사용자의 한국어 검색어를 일본어로 번역하세요. 설명이나 따옴표 없이 번역된 결과(일본어)만 출력하세요."},
+                {"role": "system", "content": "사용자의 한국어 검색어를 일본어로 번역하세요. 설명이나 따옴표 없이 번역된 결과만 출력하세요."},
                 {"role": "user", "content": query}
             ],
             temperature=0.3
         )
         return response.choices[0].message.content.strip()
-    except Exception as e:
-        print(f"번역 에러: {e}")
+    except Exception:
+        return query
+
+# 한국어 검색어를 영어로 번역
+def translate_to_en(query):
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "사용자의 한국어 검색어를 영어로 번역하세요. 설명이나 따옴표 없이 번역된 결과만 출력하세요."},
+                {"role": "user", "content": query}
+            ],
+            temperature=0.3
+        )
+        return response.choices[0].message.content.strip()
+    except Exception:
         return query
 
 def fetch_top_images(query):
@@ -65,7 +81,7 @@ def fetch_community_data(query, sites):
                     title = item.get('title', '제목 없음')
                     snippet = item.get('snippet', '내용 없음')
                     link = item.get('link', '#')
-                    date = item.get('date', '') # 날짜 데이터 추출 시도
+                    date = item.get('date', '')
                     
                     all_context += f"제목: {title}\n내용: {snippet}\n\n"
                     
@@ -89,7 +105,7 @@ def generate_core_summary(context_text):
     system_prompt = """
     당신은 수많은 다국어 커뮤니티 반응을 하나로 꿰뚫어 보는 전문 분석가입니다.
     제공된 검색 결과들을 종합하여 핵심 여론을 분석하세요.
-    1. 원본 데이터가 외국어라도 반드시 '한국어'로 작성할 것
+    1. 원본 데이터가 외국어(영어, 일본어 등)라도 반드시 한국어로 작성할 것
     2. 사이트별 구분 없이 통합 분석
     3. 번호 매기지 않음
     4. 딱 3줄 정도로 핵심만 명확하게 작성
@@ -117,9 +133,13 @@ def search_handler():
     if not query:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
         
+    # 국가별 설정 분기
     if region == "JP":
         search_query = translate_to_jp(query)
         target_sites = ["5ch.net", "x.com", "youtube.com"]
+    elif region == "US":
+        search_query = translate_to_en(query)
+        target_sites = ["reddit.com", "x.com", "youtube.com", "4chan.org", "quora.com"]
     else:
         search_query = query
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
@@ -135,7 +155,6 @@ def search_handler():
         "translated_query": search_query
     })
 
-# 원본 데이터 번역을 위한 새로운 API 엔드포인트
 @app.route('/api/translate', methods=['POST'])
 def translate_snippet():
     data = request.json
