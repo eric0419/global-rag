@@ -17,7 +17,7 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# --- 복구된 기존 함수들 ---
+# --- 번역 함수 ---
 def translate_to_jp(query):
     client = OpenAI(api_key=OPENAI_API_KEY)
     try:
@@ -48,6 +48,7 @@ def translate_to_en(query):
     except Exception:
         return query
 
+# --- 이미지 검색 ---
 def fetch_top_images(query):
     url = "https://google.serper.dev/images"
     payload = json.dumps({"q": query, "gl": "kr", "hl": "ko", "num": 3})
@@ -55,10 +56,9 @@ def fetch_top_images(query):
     
     image_urls = []
     try:
-        response = requests.request("POST", url, headers=headers, data=payload)
+        response = requests.post(url, headers=headers, data=payload)
         response.raise_for_status()
         items = response.json().get('images', [])
-        
         for item in items[:3]:
             image_urls.append(item.get('imageUrl'))
     except Exception:
@@ -66,6 +66,7 @@ def fetch_top_images(query):
         
     return image_urls
 
+# --- LLM 요약 ---
 def generate_core_summary(context_text):
     if not context_text:
         return "분석할 데이터가 없습니다."
@@ -92,9 +93,8 @@ def generate_core_summary(context_text):
         return response.choices[0].message.content
     except Exception as e:
         return f"LLM 분석 에러: {e}"
-# --------------------------
 
-# --- 새롭게 추가했던 가중치 및 날짜 정렬 함수 ---
+# --- 날짜 파싱 ---
 def parse_date(date_str):
     if not date_str:
         return datetime.min
@@ -115,71 +115,81 @@ def parse_date(date_str):
         for fmt in ("%b %d, %Y", "%Y. %m. %d.", "%Y-%m-%d"):
             try:
                 return datetime.strptime(date_str.strip('. '), fmt)
-            except:
+            except Exception:
                 continue
-    except:
+    except Exception:
         pass
     return datetime.min
 
+# --- 핵심 수정: 전체 긁어온 뒤 가중치로 필터링 ---
 def fetch_community_data_weighted(query, sites):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
-    
-    site_stats = []
-    total_mentions = 0
-    
-    # 1단계: 각 사이트별 언급량(totalResults) 파악
-    for site in sites:
-        payload = json.dumps({"q": f"site:{site} {query}", "gl": "kr", "hl": "ko", "num": 1})
-        try:
-            res = requests.post(url, headers=headers, data=payload).json()
-            count = res.get('searchInformation', {}).get('totalResults', 0)
-            count = int(count) if count else 0
-            
-            site_stats.append({"site": site, "count": count})
-            total_mentions += count
-        except:
-            site_stats.append({"site": site, "count": 0})
-
-    # 2단계: 가중치에 따른 수집 개수 할당 (총 15개 목표)
     TOTAL_TARGET = 15
-    raw_list = []
-    all_context = ""
 
-    for item in site_stats:
-        site = item['site']
-        count = item['count']
-        
-        if total_mentions > 0:
-            assigned_num = max(1, min(8, round((count / total_mentions) * TOTAL_TARGET)))
-        else:
-            assigned_num = 3 
-            
-        payload = json.dumps({"q": f"site:{site} {query}", "gl": "kr", "hl": "ko", "num": assigned_num})
+    # 1단계: 모든 사이트에서 num=10으로 최대한 수집 + totalResults 파악
+    site_buckets = []
+    total_mentions = 0
+
+    for site in sites:
+        payload = json.dumps({
+            "q": f"site:{site} {query}",
+            "gl": "kr", "hl": "ko",
+            "num": 10  # 항상 최대로 요청
+        })
         try:
             res = requests.post(url, headers=headers, data=payload).json()
+            count = int(res.get('searchInformation', {}).get('totalResults', 0) or 0)
             items = res.get('organic', [])
-            for entry in items:
-                raw_list.append({
-                    "site": site,
-                    "title": entry.get('title', '제목 없음'),
-                    "snippet": entry.get('snippet', '내용 없음'),
-                    "link": entry.get('link', '#'),
-                    "date": entry.get('date', ''),
-                    "dt_object": parse_date(entry.get('date', ''))
-                })
-        except:
-            continue
 
-    # 3단계: 날짜 기준 내림차순 정렬 (최신순)
+            site_buckets.append({
+                "site": site,
+                "count": count,
+                "items": items
+            })
+            total_mentions += count
+        except Exception:
+            site_buckets.append({"site": site, "count": 0, "items": []})
+
+    # 2단계: totalResults 비율로 각 사이트에서 몇 개 포함할지 결정 후 슬라이싱
+    raw_list = []
+
+    for bucket in site_buckets:
+        site = bucket["site"]
+        count = bucket["count"]
+        items = bucket["items"]
+
+        if total_mentions > 0 and count > 0:
+            keep = max(1, round((count / total_mentions) * TOTAL_TARGET))
+        else:
+            # 언급량 데이터가 없으면 균등 배분
+            keep = max(1, TOTAL_TARGET // len(sites))
+
+        # 실제 수집된 것 중에서 keep개만 선택
+        for entry in items[:keep]:
+            raw_list.append({
+                "site": site,
+                "title": entry.get('title', '제목 없음'),
+                "snippet": entry.get('snippet', '내용 없음'),
+                "link": entry.get('link', '#'),
+                "date": entry.get('date', ''),
+                "dt_object": parse_date(entry.get('date', ''))
+            })
+
+    # 3단계: 최신순 정렬
     raw_list.sort(key=lambda x: x['dt_object'], reverse=True)
 
-    # 4단계: 요약용 텍스트 컨텍스트 생성
+    # 4단계: 요약용 컨텍스트 생성 + dt_object 제거
+    all_context = ""
     for entry in raw_list:
         all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
         del entry['dt_object']
 
-    return all_context, raw_list
+    # 언급량 통계도 함께 반환 (차트용)
+    site_stats = [{"site": b["site"], "count": b["count"]} for b in site_buckets]
+
+    return all_context, raw_list, site_stats
+
 
 @app.route('/api/search', methods=['POST'])
 def search_handler():
@@ -201,15 +211,17 @@ def search_handler():
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
     images = fetch_top_images(search_query)
-    collected_context, raw_list = fetch_community_data_weighted(search_query, target_sites)
+    collected_context, raw_list, site_stats = fetch_community_data_weighted(search_query, target_sites)
     final_report = generate_core_summary(collected_context)
     
     return jsonify({
         "images": images,
         "report": final_report,
         "raw_data_list": raw_list,
+        "site_stats": site_stats,       # 언급량 차트용 데이터 (프론트엔드에서 선택적으로 활용)
         "translated_query": search_query
     })
+
 
 @app.route('/api/translate', methods=['POST'])
 def translate_snippet():
