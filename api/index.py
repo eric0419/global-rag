@@ -133,16 +133,20 @@ def extract_root_domain(url):
     except Exception:
         return ''
 
-# --- 핵심: site 없이 한 번에 검색 후 도메인 기반 분류 ---
+# --- 핵심 최적화: OR 연산자를 이용한 1회 API 호출 및 도메인 분류 ---
 def fetch_community_data_by_domain(query, target_sites):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
 
     print(f"\n========== 검색 시작: '{query}' ==========")
 
-    # 1단계: site: 없이 검색어만으로 40개 요청 (구글 관련도순)
+    # 1단계: 타겟 사이트 5개를 OR 연산자로 묶어서 검색어 뒤에 붙임
+    # 예: "안성재 와인 (site:dcinside.com OR site:fmkorea.com OR ...)"
+    site_query_string = " OR ".join([f"site:{site}" for site in target_sites])
+    combined_query = f"{query} ({site_query_string})"
+
     payload = json.dumps({
-        "q": query,
+        "q": combined_query,
         "gl": "kr", "hl": "ko",
         "num": 40
     })
