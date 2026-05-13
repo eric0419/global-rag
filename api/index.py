@@ -140,11 +140,8 @@ def fetch_community_data_by_domain(query, target_sites):
 
     print(f"\n========== 검색 시작: '{query}' ==========")
 
-    # 1단계: 타겟 사이트 5개를 OR 연산자로 묶어서 검색어 뒤에 붙임
-    # 예: "안성재 와인 (site:dcinside.com OR site:fmkorea.com OR ...)"
-    site_query_string = " OR ".join([f"site:{site}" for site in target_sites])
-    combined_query = f"{query} ({site_query_string})"
-
+    combined_query = " OR ".join([f"{query} site:{site}" for site in target_sites])
+    
     payload = json.dumps({
         "q": combined_query,
         "gl": "kr", "hl": "ko",
