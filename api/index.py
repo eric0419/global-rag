@@ -4,6 +4,8 @@ import json
 import os
 from openai import OpenAI
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
+from collections import Counter
 import re
 
 app = Flask(__name__)
@@ -121,85 +123,83 @@ def parse_date(date_str):
         pass
     return datetime.min
 
-# --- 핵심 수정: 전체 긁어온 뒤 실제 수집된 글 수 기반으로 가중치 계산 ---
-def fetch_community_data_weighted(query, sites):
+# --- URL에서 루트 도메인 추출 (subdomain 제거) ---
+# e.g. "gall.dcinside.com" -> "dcinside.com"
+def extract_root_domain(url):
+    try:
+        netloc = urlparse(url).netloc
+        parts = netloc.split('.')
+        return '.'.join(parts[-2:])
+    except Exception:
+        return ''
+
+# --- 핵심: site 없이 한 번에 검색 후 도메인 기반 분류 ---
+def fetch_community_data_by_domain(query, target_sites):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
-    TOTAL_TARGET = 15
-
-    # 1단계: 모든 사이트에서 num=10으로 최대한 수집
-    site_buckets = []
-    total_mentions = 0
 
     print(f"\n========== 검색 시작: '{query}' ==========")
 
-    for site in sites:
-        payload = json.dumps({
-            "q": f"site:{site} {query}",
-            "gl": "kr", "hl": "ko",
-            "num": 10  # 항상 최대로 요청
-        })
-        try:
-            res = requests.post(url, headers=headers, data=payload).json()
-            items = res.get('organic', [])
+    # 1단계: site: 없이 검색어만으로 40개 요청 (구글 관련도순)
+    payload = json.dumps({
+        "q": query,
+        "gl": "kr", "hl": "ko",
+        "num": 40
+    })
 
-            # 수정 — 실제 수집된 글 수 기반 (이게 진짜 가중치 기준)
-            count = len(items)
+    try:
+        res = requests.post(url, headers=headers, data=payload).json()
+        all_items = res.get('organic', [])
+        print(f"[검색 완료] 총 {len(all_items)}개 결과 수신")
+    except Exception as e:
+        print(f"[검색 에러] {e}")
+        return "", [], []
 
-            site_buckets.append({
-                "site": site,
-                "count": count,
-                "items": items
-            })
-            total_mentions += count
-            print(f"[API 호출 성공] {site} -> 실제 수집된 글(가중치): {count}개")
+    # 2단계: 타겟 루트 도메인 목록 미리 계산
+    target_root_domains = {site: extract_root_domain(site) for site in target_sites}
 
-        except Exception as e:
-            print(f"[API 호출 에러] {site} -> {e}")
-            site_buckets.append({"site": site, "count": 0, "items": []})
+    # 3단계: 구글 관련도 순서 유지하며 도메인 기준 분류
+    raw_list = []       # 타겟 사이트 글만 (프론트 표시용)
+    all_context = ""    # LLM 요약용
+    site_counts = {site: 0 for site in target_sites}
+    other_count = 0
 
-    print(f"--- 전체 가중치 합계: {total_mentions}개 ---")
+    for item in all_items:
+        link = item.get('link', '')
+        root_domain = extract_root_domain(link)
+        matched_site = None
 
-    # 2단계: 수집된 글 수 비율로 각 사이트에서 몇 개 포함할지 결정 후 슬라이싱
-    raw_list = []
+        for site, target_root in target_root_domains.items():
+            if target_root and (target_root in root_domain or root_domain in target_root):
+                matched_site = site
+                break
 
-    for bucket in site_buckets:
-        site = bucket["site"]
-        count = bucket["count"]
-        items = bucket["items"]
-
-        if total_mentions > 0 and count > 0:
-            keep = max(1, round((count / total_mentions) * TOTAL_TARGET))
-        else:
-            keep = max(1, TOTAL_TARGET // len(sites))
-
-        print(f"[분배 결과] {site}: 수집된 {count}개 중 -> {keep}개 최종 채택")
-
-        # 실제 수집된 것 중에서 keep개만 선택
-        for entry in items[:keep]:
+        if matched_site:
+            site_counts[matched_site] += 1
             raw_list.append({
-                "site": site,
-                "title": entry.get('title', '제목 없음'),
-                "snippet": entry.get('snippet', '내용 없음'),
-                "link": entry.get('link', '#'),
-                "date": entry.get('date', ''),
-                "dt_object": parse_date(entry.get('date', ''))
+                "site": matched_site,
+                "title": item.get('title', '제목 없음'),
+                "snippet": item.get('snippet', '내용 없음'),
+                "link": link,
+                "date": item.get('date', ''),
             })
+            all_context += f"제목: {item.get('title', '')}\n내용: {item.get('snippet', '')}\n\n"
+        else:
+            other_count += 1  # 기타는 카운트만, raw_list에는 미포함
 
-    # 3단계: 최신순 정렬
-    raw_list.sort(key=lambda x: x['dt_object'], reverse=True)
-
-    # 4단계: 요약용 컨텍스트 생성 + dt_object 제거
-    all_context = ""
-    for entry in raw_list:
-        all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
-        del entry['dt_object']
-
-    # 언급량 통계도 함께 반환 (차트용)
-    site_stats = [{"site": b["site"], "count": b["count"]} for b in site_buckets]
-
+    # 4단계: 로그 출력
+    for site in target_sites:
+        print(f"[도메인 분류] {site}: {site_counts[site]}개")
+    print(f"[도메인 분류] 기타: {other_count}개")
+    print(f"[최종] 타겟 사이트 글 합계: {len(raw_list)}개 / 기타 {other_count}개 제외")
     print("========== 검색 완료 ==========\n")
+
+    # 5단계: site_stats 생성 (기타 포함 — 그래프용)
+    site_stats = [{"site": site, "count": site_counts[site]} for site in target_sites]
+    site_stats.append({"site": "기타", "count": other_count})
+
     return all_context, raw_list, site_stats
+
 
 @app.route('/api/search', methods=['POST'])
 def search_handler():
@@ -221,16 +221,17 @@ def search_handler():
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
     
     images = fetch_top_images(search_query)
-    collected_context, raw_list, site_stats = fetch_community_data_weighted(search_query, target_sites)
+    collected_context, raw_list, site_stats = fetch_community_data_by_domain(search_query, target_sites)
     final_report = generate_core_summary(collected_context)
     
     return jsonify({
         "images": images,
         "report": final_report,
         "raw_data_list": raw_list,
-        "site_stats": site_stats,       # 언급량 차트용 데이터 (프론트엔드에서 선택적으로 활용)
+        "site_stats": site_stats,       # 기타 포함한 언급량 차트용 데이터
         "translated_query": search_query
     })
+
 
 @app.route('/api/translate', methods=['POST'])
 def translate_snippet():
