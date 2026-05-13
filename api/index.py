@@ -105,7 +105,7 @@ def parse_date(date_str):
     except: pass
     return datetime.min
 
-# --- [수정 핵심] 언급량 비율에 따른 가중치 배분 로직 ---
+# --- [최종 진화형] 글의 총량이 아닌 '최신성(시간 밀도)' 기반의 화력 점수 배분 ---
 def fetch_community_data_weighted(query, sites):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
@@ -114,27 +114,45 @@ def fetch_community_data_weighted(query, sites):
     site_buckets = []
     total_weight = 0
 
-    print(f"\n========== 검색 및 가중치 분석 시작: '{query}' ==========")
+    print(f"\n========== 검색 및 [최신 화력] 분석 시작: '{query}' ==========")
 
     for site in sites:
         payload = json.dumps({"q": f"site:{site} {query}", "gl": "kr", "hl": "ko", "num": 10})
         try:
             res = requests.post(url, headers=headers, data=payload).json()
             items = res.get('organic', [])
-            
-            # 1. 구글이 추정한 전체 결과 수 가져오기 (콤마 제거)
-            raw_total = res.get('searchInformation', {}).get('totalResults', '0')
-            google_estimate = int(str(raw_total).replace(',', ''))
-            
-            # 2. [가중치 결정 로직]
-            # 구글이 숫자를 줬다면 그 숫자를 쓰고, 0이라고 줬는데 글이 검색됐다면 최소 가중치 100 부여
-            weight = google_estimate
-            if weight == 0 and len(items) > 0:
-                weight = 100 
 
-            site_buckets.append({"site": site, "weight": weight, "items": items})
+            parsed_items = []
+            score = 0
+            now = datetime.now()
+
+            # 1. 10개 샘플의 날짜를 분석하여 화력 점수(Score) 계산
+            for entry in items:
+                dt_obj = parse_date(entry.get('date', ''))
+                parsed_items.append({
+                    "title": entry.get('title', '제목 없음'),
+                    "snippet": entry.get('snippet', '내용 없음'),
+                    "link": entry.get('link', '#'),
+                    "date": entry.get('date', ''),
+                    "dt_object": dt_obj
+                })
+
+                if dt_obj == datetime.min:
+                    score += 1  # 날짜가 없으면 기본 1점
+                else:
+                    delta = now - dt_obj
+                    if delta.days == 0: score += 10       # 24시간 이내 극초신성 (가중치 폭발)
+                    elif delta.days <= 3: score += 5      # 3일 이내
+                    elif delta.days <= 7: score += 3      # 일주일 이내
+                    elif delta.days <= 30: score += 1     # 한 달 이내
+                    else: score += 0.1                    # 과거 글
+
+            # 글이 하나라도 있으면 최소 1점 보장
+            weight = score if score > 0 else (1 if len(items) > 0 else 0)
+
+            site_buckets.append({"site": site, "weight": weight, "items": parsed_items})
             total_weight += weight
-            print(f"[데이터 수집] {site} -> 추정 언급량: {weight}, 가져온 샘플: {len(items)}개")
+            print(f"[화력 분석] {site} -> 최신 밀도 점수: {weight:.1f}점 (샘플 {len(items)}개)")
         except Exception as e:
             print(f"[에러] {site}: {e}")
             site_buckets.append({"site": site, "weight": 0, "items": []})
@@ -145,26 +163,25 @@ def fetch_community_data_weighted(query, sites):
         weight = bucket["weight"]
         items = bucket["items"]
 
-        # 3. 전체 가중치 대비 비율로 '최종 노출 개수' 결정
+        # 2. 화력 점수 비율에 따라 대시보드 노출 개수 결정
         if total_weight > 0 and weight > 0:
-            # 최소 1개, 최대 8개로 제한하여 다양성과 비중을 모두 잡음
             keep = max(1, min(8, round((weight / total_weight) * TOTAL_TARGET)))
         else:
             keep = max(1, TOTAL_TARGET // len(sites))
 
-        print(f"[최종 배분] {site}: 가중치 {weight}에 따라 {keep}개 채택")
+        print(f"[최종 배분] {site}: 화력 {weight:.1f}점에 따라 {keep}개 채택")
 
         for entry in items[:keep]:
             raw_list.append({
                 "site": site,
-                "title": entry.get('title', '제목 없음'),
-                "snippet": entry.get('snippet', '내용 없음'),
-                "link": entry.get('link', '#'),
-                "date": entry.get('date', ''),
-                "dt_object": parse_date(entry.get('date', ''))
+                "title": entry['title'],
+                "snippet": entry['snippet'],
+                "link": entry['link'],
+                "date": entry['date'],
+                "dt_object": entry['dt_object']
             })
 
-    # 최신순 정렬
+    # 3. 모인 데이터를 최종적으로 최신순 정렬
     raw_list.sort(key=lambda x: x['dt_object'], reverse=True)
 
     all_context = ""
@@ -172,7 +189,7 @@ def fetch_community_data_weighted(query, sites):
         all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
         del entry['dt_object']
 
-    site_stats = [{"site": b["site"], "count": b["weight"]} for b in site_buckets]
+    site_stats = [{"site": b["site"], "count": round(b["weight"], 1)} for b in site_buckets]
     return all_context, raw_list, site_stats
 
 @app.route('/api/search', methods=['POST'])
