@@ -228,6 +228,45 @@ def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
 
     return all_context, raw_list, site_stats
 
+def fetch_fixed_jp_data(query, gl="jp", hl="ja", tbs=""):
+    headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
+    url = "https://google.serper.dev/search"
+    target_sites = ["youtube.com", "x.com"]
+    site_counts = {}
+    raw_list = []
+
+    for site in target_sites:
+        payload_dict = {"q": f"site:{site} {query}", "gl": gl, "hl": hl, "num": 6}
+        if tbs:
+            payload_dict["tbs"] = tbs
+            
+        try:
+            res = requests.post(url, headers=headers, data=json.dumps(payload_dict)).json()
+            items = res.get('organic', [])[:6]
+            site_counts[site] = len(items)
+
+            for entry in items:
+                raw_list.append({
+                    "site": site,
+                    "title": entry.get('title', '제목 없음'),
+                    "snippet": entry.get('snippet', '내용 없음'),
+                    "link": entry.get('link', '#'),
+                    "date": entry.get('date', ''),
+                    "dt_object": parse_date(entry.get('date', ''))
+                })
+        except Exception:
+            site_counts[site] = 0
+
+    raw_list.sort(key=lambda x: x.pop('dt_object'), reverse=True)
+    
+    all_context = ""
+    for entry in raw_list:
+        all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
+        
+    site_stats = [{"site": site, "count": site_counts.get(site, 0)} for site in target_sites]
+    
+    return all_context, raw_list, site_stats
+
 def cosine_similarity(vec1, vec2):
     dot_product = sum(a * b for a, b in zip(vec1, vec2))
     norm1 = sum(a * a for a in vec1) ** 0.5
@@ -335,21 +374,23 @@ def search_handler():
 
     if region == "JP":
         search_query = translate_to_jp(query)
-        target_sites = ["5ch.net", "x.com", "youtube.com"]
         gl, hl = "jp", "ja"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_fixed_jp_data(search_query, gl=gl, hl=hl, tbs=tbs)
     elif region == "US":
         search_query = translate_to_en(query)
         target_sites = ["reddit.com", "x.com", "youtube.com", "4chan.org", "quora.com"]
         gl, hl = "us", "en"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     else:
         search_query = query
         target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
         gl, hl = "kr", "ko"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
 
-    images = fetch_top_images(search_query, tbs=tbs)
-    collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     final_report = generate_core_summary(collected_context)
-    
     raw_list = attach_similarity_scores(final_report, raw_list)
 
     return jsonify({
