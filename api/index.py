@@ -18,9 +18,8 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-COMMUNITY_THRESHOLD = 10  # 이 수 미만이면 site: 방식으로 전환
+COMMUNITY_THRESHOLD = 10
 
-# --- 번역 함수 ---
 def translate_to_jp(query):
     client = OpenAI(api_key=OPENAI_API_KEY)
     try:
@@ -51,7 +50,6 @@ def translate_to_en(query):
     except Exception:
         return query
 
-# --- 이미지 검색 ---
 def fetch_top_images(query, tbs=""):
     url = "https://google.serper.dev/images"
     payload_dict = {"q": query, "gl": "kr", "hl": "ko", "num": 3}
@@ -70,7 +68,6 @@ def fetch_top_images(query, tbs=""):
         pass
     return image_urls
 
-# --- LLM 요약 ---
 def generate_core_summary(context_text):
     if not context_text:
         return "분석할 데이터가 없습니다."
@@ -96,7 +93,6 @@ def generate_core_summary(context_text):
     except Exception as e:
         return f"LLM 분석 에러: {e}"
 
-# --- 날짜 파싱 ---
 def parse_date(date_str):
     if not date_str:
         return datetime.min
@@ -117,7 +113,6 @@ def parse_date(date_str):
         pass
     return datetime.min
 
-# --- URL에서 루트 도메인 추출 ---
 def extract_root_domain(url):
     try:
         netloc = urlparse(url).netloc
@@ -126,7 +121,6 @@ def extract_root_domain(url):
     except Exception:
         return ''
 
-# --- 페이지네이션으로 최대 40개 수집 ---
 def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
@@ -140,7 +134,7 @@ def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
             "num": 10,
             "page": page
         }
-        if tbs:  # 기간 설정이 있으면 파라미터 추가
+        if tbs:
             payload_dict["tbs"] = tbs
             
         try:
@@ -157,8 +151,6 @@ def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
 
     return all_items[:target]
 
-
-# --- 방식 A: site 없이 페이지네이션으로 40개 수집 후 도메인 분류 ---
 def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko", tbs=""):
     all_items = fetch_paginated(query, gl=gl, hl=hl, tbs=tbs, target=40)
     print(f"[방식A] 총 {len(all_items)}개 수신")
@@ -196,8 +188,6 @@ def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko", tbs=""):
 
     return raw_list, site_counts, other_count
 
-
-# --- 방식 B: site: 개별 호출 (각 사이트 3개씩 균등, 최신순) ---
 def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
     headers = {'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json'}
     url = "https://google.serper.dev/search"
@@ -228,17 +218,13 @@ def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
             print(f"[방식B 에러] {site}: {e}")
             site_counts[site] = 0
 
-    # 최신순 정렬
     raw_list.sort(key=lambda x: x.pop('dt_object'), reverse=True)
 
     return raw_list, site_counts
 
-
-# --- 통합 진입점: 방식A 시도 → 결과 부족 시 방식B로 전환 ---
 def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
     print(f"\n========== 검색 시작: '{query}' (기간: {tbs if tbs else '전체'}) ==========")
 
-    # 1단계: 방식A 시도 (페이지네이션 40개)
     raw_list, site_counts, other_count = fetch_by_broad_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
     total_community = sum(site_counts.values())
 
@@ -251,7 +237,6 @@ def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
         raw_list, site_counts = fetch_by_site_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
         site_stats = [{"site": site, "count": site_counts.get(site, 0)} for site in target_sites]
 
-    # 컨텍스트 생성
     all_context = ""
     for entry in raw_list:
         all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
@@ -261,13 +246,60 @@ def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
 
     return all_context, raw_list, site_stats
 
+@app.route('/api/parse_intent', methods=['POST'])
+def parse_intent_handler():
+    data = request.json
+    user_input = data.get("query", "")
+    current_region = data.get("current_region", "KR") # 현재 사용자가 선택해둔 국가
+    
+    if not user_input:
+        return jsonify({"region": current_region, "optimized_query": ""})
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    
+    system_prompt = f"""
+    당신은 글로벌 여론 검색 엔진의 '쿼리 라우터(Query Router)'입니다.
+    사용자의 자연어 질문을 분석하여 타겟 국가코드(KR, JP, US)와 검색 엔진에 입력할 핵심 키워드를 추출하세요.
+    
+    [규칙]
+    1. 사용자의 현재 기본 국가 설정은 "{current_region}"입니다.
+    2. '일본 반응', '현지 반응(일본)' 등 질문 내에 명백하게 특정 국가를 지칭하는 맥락이 있다면 그에 맞춰 region을 "JP" 또는 "US" 등으로 변경하세요.
+    3. 질문 내에 특정 국가를 지칭하는 맥락이 **없다면**, 반드시 사용자의 현재 기본 국가 설정인 "{current_region}"을 그대로 유지하세요.
+    4. optimized_query는 문장(예: ~알려줘)이 아닌, 검색 엔진에 최적화된 명사 형태(예: "체인소맨 결말")로 압축할 것.
+    5. 반드시 JSON 형식으로만 출력할 것.
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={ "type": "json_object" },
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_input}
+            ],
+            temperature=0.1
+        )
+        
+        result = json.loads(response.choices[0].message.content)
+        
+        return jsonify({
+            "region": result.get("region", current_region),
+            "optimized_query": result.get("optimized_query", user_input)
+        })
+        
+    except Exception as e:
+        print(f"[의도 분석 에러] {e}")
+        return jsonify({
+            "region": current_region,
+            "optimized_query": user_input
+        })
 
 @app.route('/api/search', methods=['POST'])
 def search_handler():
     data = request.json
     query = data.get("query", "")
     region = data.get("region", "KR")
-    tbs = data.get("tbs", "qdr:w")  # 프론트에서 넘어온 날짜 필터 (기본값: 최근 1주)
+    tbs = data.get("tbs", "qdr:w")
 
     if not query:
         return jsonify({"error": "검색어를 입력해주세요."}), 400
@@ -296,7 +328,6 @@ def search_handler():
         "site_stats": site_stats,
         "translated_query": search_query
     })
-
 
 @app.route('/api/translate', methods=['POST'])
 def translate_snippet():
