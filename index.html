@@ -276,7 +276,7 @@
                             const div = document.createElement('div');
                             div.className = 'raw-item';
                             const textToTranslate = `제목: ${item.title}\n내용: ${item.snippet}`;
-                            const safeText = encodeURIComponent(textToTranslate);
+                            const safeText = encodeURIComponent(textToTranslate).replace(/'/g, "%27");
                             
                             let translateHtml = '';
                             if (targetRegion !== 'KR') {
