@@ -187,27 +187,56 @@
             }
         }
 
-        async function doSearch() {
+       async function doSearch() {
             const queryInput = document.getElementById('searchInput');
-            const query = queryInput.value.trim();
-            const region = document.getElementById('regionSelect').value;
-            const tbs = document.getElementById('timeSelect').value; // 기간 필터 값 가져오기
+            const originalQuery = queryInput.value.trim();
+            const currentRegion = document.getElementById('regionSelect').value; // 현재 선택된 국가
             const searchBtn = document.getElementById('searchBtn');
+            const loadingText = document.getElementById('loading');
             
-            if (!query) return alert('검색어를 입력하세요.');
+            if (!originalQuery) return alert('검색어를 입력하세요.');
 
+            // 1. UI 초기화 및 로딩 표시
             document.getElementById('mainTitle').style.display = 'none';
             document.getElementById('mainLayout').classList.add('searched');
-            
             document.getElementById('resultsContainer').style.display = 'none';
-            document.getElementById('loading').style.display = 'block';
+            loadingText.innerText = 'AI가 질문의 의도를 분석 중입니다...';
+            loadingText.style.display = 'block';
             searchBtn.disabled = true;
 
             try {
+                // 2. 의도 파악(Intent Parsing) API 호출 (현재 국가 같이 넘김)
+                const intentRes = await fetch('/api/parse_intent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: originalQuery, current_region: currentRegion })
+                });
+                
+                const intentData = await intentRes.json();
+                const optimizedQuery = intentData.optimized_query;
+                const targetRegion = intentData.region;
+
+                // 3. 분석된 결과에 맞춰 UI(검색창, 국기) 동적 업데이트
+                queryInput.value = optimizedQuery;
+                
+                // 타겟 국가가 현재 국가와 다를 때만 국기 아이콘 변경 시각 효과 적용
+                if (targetRegion !== currentRegion) {
+                    let flagImg = 'kr.png';
+                    if(targetRegion === 'JP') flagImg = 'jp.png';
+                    if(targetRegion === 'US') flagImg = 'us.png';
+                    
+                    selectOption(targetRegion, `https://flagcdn.com/w40/${flagImg.split('.')[0]}.png`);
+                }
+                
+                loadingText.innerText = `[${targetRegion}] 커뮤니티에서 '${optimizedQuery}' 데이터를 수집 중입니다...`;
+
+                // 4. 추출된 국가와 최적화된 검색어로 실제 검색 API 호출
+                const tbs = document.getElementById('timeSelect').value;
+                
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: query, region: region, tbs: tbs }) // 서버로 전송
+                    body: JSON.stringify({ query: optimizedQuery, region: targetRegion, tbs: tbs })
                 });
 
                 const data = await response.json();
@@ -228,10 +257,12 @@
                         gallery.style.display = 'none';
                     }
 
+                    // 리포트 상단에 어떻게 자동 처리되었는지 안내 문구 추가
                     let reportContent = data.report;
-                    if (region !== 'KR') {
-                        reportContent = `[자동 번역 검색어: ${data.translated_query}]\n\n` + reportContent;
+                    if (originalQuery !== optimizedQuery || targetRegion !== currentRegion) {
+                        reportContent = `💡 AI 라우터 최적화 적용: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n\n` + reportContent;
                     }
+                    
                     document.getElementById('reportText').innerText = reportContent;
                     
                     const rawContainer = document.getElementById('rawDataContainer');
@@ -248,7 +279,7 @@
                             const safeText = encodeURIComponent(textToTranslate);
                             
                             let translateHtml = '';
-                            if (region !== 'KR') {
+                            if (targetRegion !== 'KR') {
                                 translateHtml = `
                                     <button class="translate-btn" onclick="translateText(this, decodeURIComponent('${safeText}'))">번역 보기</button>
                                     <div class="translated-text" data-translated="false"></div>
