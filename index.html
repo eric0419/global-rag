@@ -260,7 +260,7 @@
                     // 리포트 상단에 어떻게 자동 처리되었는지 안내 문구 추가
                     let reportContent = data.report;
                     if (originalQuery !== optimizedQuery || targetRegion !== currentRegion) {
-                        reportContent = `💡 AI 라우터 최적화 적용: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n\n` + reportContent;
+                        reportContent = `검색: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n\n` + reportContent;
                     }
                     
                     document.getElementById('reportText').innerText = reportContent;
