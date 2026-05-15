@@ -143,18 +143,14 @@ def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
             if not items:
                 break
             all_items.extend(items)
-            print(f"[페이지네이션] page={page} → {len(items)}개 수신 (누적 {len(all_items)}개)")
             page += 1
         except Exception as e:
-            print(f"[페이지네이션 에러] page={page}: {e}")
             break
 
     return all_items[:target]
 
 def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko", tbs=""):
     all_items = fetch_paginated(query, gl=gl, hl=hl, tbs=tbs, target=40)
-    print(f"[방식A] 총 {len(all_items)}개 수신")
-
     target_root_domains = {site: extract_root_domain(site) for site in target_sites}
     site_counts = {site: 0 for site in target_sites}
     other_count = 0
@@ -182,10 +178,6 @@ def fetch_by_broad_search(query, target_sites, gl="kr", hl="ko", tbs=""):
         else:
             other_count += 1
 
-    for site in target_sites:
-        print(f"[방식A 분류] {site}: {site_counts[site]}개")
-    print(f"[방식A 분류] 기타: {other_count}개")
-
     return raw_list, site_counts, other_count
 
 def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
@@ -203,7 +195,6 @@ def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
             res = requests.post(url, headers=headers, data=json.dumps(payload_dict)).json()
             items = res.get('organic', [])
             site_counts[site] = len(items)
-            print(f"[방식B] {site}: {len(items)}개")
 
             for entry in items:
                 raw_list.append({
@@ -215,25 +206,19 @@ def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
                     "dt_object": parse_date(entry.get('date', ''))
                 })
         except Exception as e:
-            print(f"[방식B 에러] {site}: {e}")
             site_counts[site] = 0
 
     raw_list.sort(key=lambda x: x.pop('dt_object'), reverse=True)
-
     return raw_list, site_counts
 
 def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
-    print(f"\n========== 검색 시작: '{query}' (기간: {tbs if tbs else '전체'}) ==========")
-
     raw_list, site_counts, other_count = fetch_by_broad_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
     total_community = sum(site_counts.values())
 
     if total_community >= COMMUNITY_THRESHOLD:
-        print(f"[전략] 방식A 채택 (커뮤니티 글 {total_community}개 >= 기준 {COMMUNITY_THRESHOLD}개)")
         site_stats = [{"site": site, "count": site_counts[site]} for site in target_sites]
         site_stats.append({"site": "기타", "count": other_count})
     else:
-        print(f"[전략] 방식B로 전환 (커뮤니티 글 {total_community}개 < 기준 {COMMUNITY_THRESHOLD}개)")
         raw_list, site_counts = fetch_by_site_search(query, target_sites, gl=gl, hl=hl, tbs=tbs)
         site_stats = [{"site": site, "count": site_counts.get(site, 0)} for site in target_sites]
 
@@ -241,16 +226,54 @@ def fetch_community_data(query, target_sites, gl="kr", hl="ko", tbs=""):
     for entry in raw_list:
         all_context += f"제목: {entry['title']}\n내용: {entry['snippet']}\n\n"
 
-    print(f"[최종] raw_list {len(raw_list)}개")
-    print("========== 검색 완료 ==========\n")
-
     return all_context, raw_list, site_stats
+
+def cosine_similarity(vec1, vec2):
+    dot_product = sum(a * b for a, b in zip(vec1, vec2))
+    norm1 = sum(a * a for a in vec1) ** 0.5
+    norm2 = sum(b * b for b in vec2) ** 0.5
+    if norm1 == 0 or norm2 == 0:
+        return 0.0
+    return dot_product / (norm1 * norm2)
+
+def attach_similarity_scores(summary, raw_list):
+    if not raw_list or not summary:
+        return raw_list
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    texts = [summary] + [f"{item.get('title', '')} {item.get('snippet', '')}" for item in raw_list]
+    
+    try:
+        response = client.embeddings.create(input=texts, model="text-embedding-3-small")
+        embeddings = [item.embedding for item in response.data]
+        
+        summary_emb = embeddings[0]
+        snippet_embs = embeddings[1:]
+        
+        best_idx = -1
+        best_score = -1.0
+        
+        for i, emb in enumerate(snippet_embs):
+            score = cosine_similarity(summary_emb, emb)
+            raw_list[i]['similarity_score'] = score
+            raw_list[i]['is_top_reference'] = False
+            if score > best_score:
+                best_score = score
+                best_idx = i
+                
+        if best_idx != -1:
+            raw_list[best_idx]['is_top_reference'] = True
+            
+    except Exception:
+        pass
+        
+    return raw_list
 
 @app.route('/api/parse_intent', methods=['POST'])
 def parse_intent_handler():
     data = request.json
     user_input = data.get("query", "")
-    current_region = data.get("current_region", "KR") # 현재 사용자가 선택해둔 국가
+    current_region = data.get("current_region", "KR")
     
     if not user_input:
         return jsonify({"region": current_region, "optimized_query": ""})
@@ -265,8 +288,8 @@ def parse_intent_handler():
     1. 사용자의 현재 기본 국가 설정은 "{current_region}"입니다.
     2. '일본', '미국', '해외' 등 질문 내에 명백하게 특정 국가를 지칭하는 단어가 있다면 그에 맞춰 region을 "JP" 또는 "US" 등으로 변경하세요.
     3. 특정 국가를 지칭하는 단어가 없다면, 반드시 사용자의 현재 기본 국가 설정인 "{current_region}"을 그대로 유지하세요.
-    4. [중요] optimized_query를 만들 때, '일본', '미국', '한국', '해외' 같은 **국가/지역 지칭 단어**와 '~알려줘', '~어때', '~찾아줘' 같은 **대화형 서술어만 제거**하세요.
-    5. '후기', '반응', '논란', '평가' 등 검색 목적을 나타내는 명사 키워드는 **절대 지우지 말고 그대로 포함**하세요.
+    4. [중요] optimized_query를 만들 때, '일본', '미국', '한국', '해외' 같은 국가/지역 지칭 단어와 '~알려줘', '~어때', '~찾아줘' 같은 대화형 서술어만 제거하세요.
+    5. '후기', '반응', '논란', '평가' 등 검색 목적을 나타내는 명사 키워드는 절대 지우지 말고 그대로 포함하세요.
     
     [변환 예시]
     - "프로젝트 헤일메리 일본 반응 알려줘" -> region: "JP", optimized_query: "프로젝트 헤일메리 반응"
@@ -294,8 +317,7 @@ def parse_intent_handler():
             "optimized_query": result.get("optimized_query", user_input)
         })
         
-    except Exception as e:
-        print(f"[의도 분석 에러] {e}")
+    except Exception:
         return jsonify({
             "region": current_region,
             "optimized_query": user_input
@@ -327,6 +349,8 @@ def search_handler():
     images = fetch_top_images(search_query, tbs=tbs)
     collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     final_report = generate_core_summary(collected_context)
+    
+    raw_list = attach_similarity_scores(final_report, raw_list)
 
     return jsonify({
         "images": images,
@@ -356,5 +380,5 @@ def translate_snippet():
         )
         translated_text = response.choices[0].message.content.strip()
         return jsonify({"translated_text": translated_text})
-    except Exception as e:
-        return jsonify({"translated_text": f"번역 실패: {e}"}), 500
+    except Exception:
+        return jsonify({"translated_text": "번역 실패"}), 500
