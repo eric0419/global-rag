@@ -96,7 +96,7 @@
                 <div class="card">
                     <div id="imageGallery" class="image-gallery"></div>
                     
-                    <div class="section-title">핵심 요약 리포트</div>
+                    <div class="section-title">요약 리포트</div>
                     <div id="reportText" class="report-text"></div>
                     
                     <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
@@ -225,7 +225,7 @@
             document.getElementById('mainTitle').style.display = 'none';
             document.getElementById('mainLayout').classList.add('searched');
             document.getElementById('resultsContainer').style.display = 'none';
-            loadingText.innerText = 'AI가 질문의 의도를 분석 중입니다...';
+            loadingText.innerText = '질문의 의도를 분석 중입니다...';
             loadingContainer.style.display = 'block';
             searchBtn.disabled = true;
 
@@ -282,9 +282,9 @@
                     let reportContent = data.report;
                     const totalDataCount = data.raw_data_list ? data.raw_data_list.length : 0;
                     
-                    let metaInfo = `[총 ${totalDataCount}개의 데이터를 기반으로 분석되었습니다.]\n`;
+                    let metaInfo = `[${totalDataCount}개의 데이터를 기반으로 분석되었습니다.]\n`;
                     if (originalQuery !== optimizedQuery || targetRegion !== currentRegion) {
-                        metaInfo += `💡 AI 라우터 최적화 적용: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n`;
+                        metaInfo += `검색 도구: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n`;
                     }
                     reportContent = metaInfo + "\n" + reportContent;
                     
@@ -304,7 +304,7 @@
                             let badgeHtml = '';
                             if (item.is_top_reference) {
                                 topClass = ' top-reference';
-                                badgeHtml = `<div class="top-ref-badge">⭐ AI 핵심 참고 자료</div>`;
+                                badgeHtml = `<div class="top-ref-badge">이 글을 참고해보세요</div>`;
                             }
                             
                             div.className = 'raw-item' + topClass;
