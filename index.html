@@ -1,83 +1,573 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Global Echo RAG</title>
     <style>
-        * { box-sizing: border-box; }
-        
-        body, html { height: 100%; margin: 0; font-family: 'Pretendard', -apple-system, sans-serif; background-color: #f4f7f6; color: #333; }
-        
-        .top-logo { position: absolute; top: 24px; left: 24px; font-weight: bold; font-size: 18px; color: #1a73e8; z-index: 10; cursor: pointer; }
-        
-        .layout { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 80px 20px 40px 20px; transition: all 0.4s ease; }
-        .layout.searched { justify-content: flex-start; padding-top: 100px; padding-bottom: 120px; }
-        
-        .container { width: 100%; max-width: 800px; position: relative; }
-        
-        .main-title { text-align: center; font-size: 32px; font-weight: bold; color: #1a73e8; margin-bottom: 30px; }
-        
-        .search-wrapper { width: 100%; transition: all 0.4s ease; }
-        .layout.searched .search-wrapper { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); max-width: 800px; padding: 0 20px; z-index: 100; }
-        
-        .search-box { display: flex; align-items: center; gap: 10px; background: #ffffff; padding: 10px 10px 10px 15px; border-radius: 30px; border: 1px solid #ddd; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: 0.2s; }
-        .search-box:focus-within { border-color: #1a73e8; box-shadow: 0 4px 15px rgba(26,115,232,0.15); }
-        
-        .custom-select { position: relative; display: flex; align-items: center; border-right: 1px solid #eee; padding-right: 10px; cursor: pointer; user-select: none; }
-        .select-selected { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #333; padding: 5px; }
-        .select-selected img { width: 24px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .select-selected::after { content: '▼'; font-size: 10px; margin-left: 5px; color: #888; }
-        .select-items { position: absolute; bottom: 130%; left: 0; background-color: #fff; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0,0,0,0.1); width: 110px; z-index: 101; display: none; flex-direction: column; overflow: hidden; }
-        .select-items div { display: flex; align-items: center; gap: 10px; padding: 12px 15px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
-        .select-items div:hover { background-color: #f4f7f6; }
-        .select-items img { width: 24px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .select-show { display: flex; }
-        
-        .time-select { border: none; background: transparent; font-size: 14px; font-weight: 600; color: #555; outline: none; cursor: pointer; padding-right: 10px; border-right: 1px solid #eee; }
-        
-        input { flex: 1; border: none; padding: 10px 5px; font-size: 16px; outline: none; background: transparent; }
-        button { padding: 12px 25px; background-color: #1a73e8; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 16px; font-weight: bold; transition: 0.2s; white-space: nowrap; }
-        button:hover { background-color: #1557b0; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        
-        .results-container { display: none; width: 100%; animation: fadeIn 0.5s ease forwards; }
-        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); line-height: 1.6; }
-        .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1a73e8; }
-        .report-text { font-size: 16px; color: #333; }
-        
-        .raw-data-list { display: flex; flex-direction: column; gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px; }
-        .raw-item { background: #f8f9fa; border: 1px solid #eee; border-radius: 8px; padding: 15px; transition: transform 0.1s; }
-        .raw-item:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
-        
-        .raw-item.top-reference { border: 2px solid #fbbc05; background-color: #fffdf3; }
-        .top-ref-badge { display: inline-block; background: #fbbc05; color: #fff; font-size: 12px; font-weight: bold; padding: 4px 10px; border-radius: 12px; margin-bottom: 10px; }
-        
-        .raw-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .raw-site-info { display: flex; align-items: center; gap: 8px; }
-        .raw-favicon { width: 16px; height: 16px; border-radius: 50%; }
-        .raw-domain { font-size: 12px; font-weight: bold; color: #555; }
-        .raw-date { font-size: 12px; color: #888; }
-        .raw-title { font-size: 15px; font-weight: 600; color: #1a0dab; margin: 0 0 5px 0; text-decoration: none; display: block; }
-        .raw-title:hover { text-decoration: underline; }
-        .raw-snippet { font-size: 13px; color: #4d5156; margin: 0 0 10px 0; line-height: 1.5; }
-        .translate-btn { background: none; border: 1px solid #1a73e8; color: #1a73e8; padding: 4px 10px; border-radius: 4px; font-size: 12px; cursor: pointer; transition: 0.2s; }
-        .translate-btn:hover { background: #1a73e8; color: white; }
-        .translated-text { display: none; margin-top: 10px; padding: 10px; background: #e8f0fe; border-left: 3px solid #1a73e8; font-size: 13px; color: #333; border-radius: 4px; line-height: 1.5; }
-        
-        .loading-container { display: none; text-align: center; padding: 60px 0; animation: fadeIn 0.5s; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #1a73e8; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 20px auto; }
-        .loading-text { font-size: 18px; font-weight: bold; color: #555; margin-bottom: 25px; }
-        .cancel-btn { background-color: #fff; color: #d93025; border: 1px solid #d93025; padding: 10px 25px; font-size: 15px; }
-        .cancel-btn:hover { background-color: #fce8e6; }
-        
-        .image-gallery { display: flex; gap: 10px; margin-bottom: 30px; justify-content: center; }
-        .image-gallery img { width: calc(33.333% - 7px); height: 140px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; }
+        * {
+            box-sizing: border-box;
+        }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+
+        .top-logo {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #1a73e8;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .layout {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 80px 20px 40px 20px;
+            transition: all 0.4s ease;
+        }
+
+        .layout.searched {
+            justify-content: flex-start;
+            padding-top: 100px;
+            padding-bottom: 120px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            position: relative;
+        }
+
+        .main-title {
+            text-align: center;
+            font-size: 32px;
+            font-weight: bold;
+            color: #1a73e8;
+            margin-bottom: 30px;
+        }
+
+        .search-wrapper {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            transition: all 0.4s ease;
+        }
+
+        .layout.searched .search-wrapper {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 800px;
+            padding: 0 20px;
+            z-index: 100;
+        }
+
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #ffffff;
+            padding: 10px 10px 10px 15px;
+            border-radius: 30px;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            transition: 0.2s;
+        }
+
+        .search-box:focus-within {
+            border-color: #1a73e8;
+            box-shadow: 0 4px 15px rgba(26, 115, 232, 0.15);
+        }
+
+        .custom-select {
+            position: relative;
+            display: flex;
+            align-items: center;
+            border-right: 1px solid #eee;
+            padding-right: 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .select-selected {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #333;
+            padding: 5px;
+        }
+
+        .select-selected img {
+            width: 24px;
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .select-selected::after {
+            content: '▼';
+            font-size: 10px;
+            margin-left: 5px;
+            color: #888;
+        }
+
+        .select-items {
+            position: absolute;
+            bottom: 130%;
+            left: 0;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+            width: 110px;
+            z-index: 101;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .select-items div {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 15px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .select-items div:hover {
+            background-color: #f4f7f6;
+        }
+
+        .select-items img {
+            width: 24px;
+            border-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .select-show {
+            display: flex;
+        }
+
+        .time-select {
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            font-weight: 600;
+            color: #555;
+            outline: none;
+            cursor: pointer;
+            padding-right: 10px;
+            border-right: 1px solid #eee;
+        }
+
+        input {
+            flex: 1;
+            border: none;
+            padding: 10px 5px;
+            font-size: 16px;
+            outline: none;
+            background: transparent;
+        }
+
+        button {
+            padding: 12px 25px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: 0.2s;
+            white-space: nowrap;
+        }
+
+        button:hover {
+            background-color: #1557b0;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .results-container {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            line-height: 1.6;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #1a73e8;
+        }
+
+        .report-text {
+            font-size: 16px;
+            color: #333;
+        }
+
+        .raw-data-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        .raw-item {
+            background: #f8f9fa;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 15px;
+            transition: transform 0.1s;
+        }
+
+        .raw-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+
+        .raw-item.top-reference {
+            border: 2px solid #fbbc05;
+            background-color: #fffdf3;
+        }
+
+        .top-ref-badge {
+            display: inline-block;
+            background: #fbbc05;
+            color: #fff;
+            font-size: 12px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+        }
+
+        .raw-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .raw-site-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .raw-favicon {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .raw-domain {
+            font-size: 12px;
+            font-weight: bold;
+            color: #555;
+        }
+
+        .raw-date {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .raw-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a0dab;
+            margin: 0 0 5px 0;
+            text-decoration: none;
+            display: block;
+        }
+
+        .raw-title:hover {
+            text-decoration: underline;
+        }
+
+        .raw-snippet {
+            font-size: 13px;
+            color: #4d5156;
+            margin: 0 0 10px 0;
+            line-height: 1.5;
+        }
+
+        .translate-btn {
+            background: none;
+            border: 1px solid #1a73e8;
+            color: #1a73e8;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+
+        .translate-btn:hover {
+            background: #1a73e8;
+            color: white;
+        }
+
+        .translated-text {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            background: #e8f0fe;
+            border-left: 3px solid #1a73e8;
+            font-size: 13px;
+            color: #333;
+            border-radius: 4px;
+            line-height: 1.5;
+        }
+
+        .loading-container {
+            display: none;
+            text-align: center;
+            padding: 60px 0;
+            animation: fadeIn 0.5s;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #1a73e8;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px auto;
+        }
+
+        .loading-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 25px;
+        }
+
+        .cancel-btn {
+            background-color: #fff;
+            color: #d93025;
+            border: 1px solid #d93025;
+            padding: 10px 25px;
+            font-size: 15px;
+        }
+
+        .cancel-btn:hover {
+            background-color: #fce8e6;
+        }
+
+        .image-gallery {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 30px;
+            justify-content: center;
+        }
+
+        .image-gallery img {
+            width: calc(33.333% - 7px);
+            height: 140px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .results-layout {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .main-results-column {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .youtube-sidebar {
+            width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: sticky;
+            top: 20px;
+        }
+
+        .youtube-sidebar-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: -4px;
+        }
+
+        .youtube-card {
+            position: relative;
+            overflow: hidden;
+            border-radius: 12px;
+            background: white;
+            border: 1px solid #eee;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            cursor: pointer;
+            transition: 0.18s;
+        }
+
+        .youtube-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+        }
+
+        .youtube-thumb {
+            width: 100%;
+            display: block;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+        }
+
+        .youtube-info {
+            padding: 12px;
+        }
+
+        .youtube-title {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.45;
+            color: #222;
+        }
+
+        .sentiment-bar {
+            width: 100%;
+            height: 6px;
+        }
+
+        .sentiment-positive {
+            background: #3b82f6;
+        }
+
+        .sentiment-negative {
+            background: #ef4444;
+        }
+
+        .sentiment-other {
+            background: #facc15;
+        }
+
+        .comment-popup {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.82);
+            color: white;
+            padding: 16px;
+            opacity: 0;
+            transition: opacity 0.18s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .youtube-card:hover .comment-popup {
+            opacity: 1;
+        }
+
+        .comment-text {
+            font-size: 13px;
+            line-height: 1.55;
+            margin-bottom: 14px;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 6;
+            -webkit-box-orient: vertical;
+        }
+
+        .comment-meta {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .sentiment-chip {
+            width: 11px;
+            height: 11px;
+            border-radius: 3px;
+        }
+
+        .chip-positive {
+            background: #3b82f6;
+        }
+
+        .chip-negative {
+            background: #ef4444;
+        }
+
+        .chip-other {
+            background: #facc15;
+        }
+
+        @media (max-width: 1200px) {
+            .results-layout {
+                flex-direction: column;
+            }
+
+            .youtube-sidebar {
+                width: 100%;
+                position: static;
+            }
+        }
     </style>
 </head>
+
 <body>
 
     <div class="top-logo" onclick="location.href='/'">Global Echo RAG</div>
@@ -85,25 +575,42 @@
     <div class="layout" id="mainLayout">
         <div class="container">
             <h1 class="main-title" id="mainTitle">다국어 커뮤니티 리서치 대시보드</h1>
-            
+
             <div id="loadingContainer" class="loading-container">
                 <div class="loader"></div>
                 <div id="loadingText" class="loading-text">AI가 질문의 의도를 분석 중입니다...</div>
                 <button class="cancel-btn" onclick="cancelSearch()">검색 취소</button>
             </div>
-            
+
             <div class="results-container" id="resultsContainer">
-                <div class="card">
-                    <div id="imageGallery" class="image-gallery"></div>
-                    
-                    <div class="section-title">요약 리포트</div>
-                    <div id="reportText" class="report-text"></div>
-                    
-                    <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
-                    
-                    <div class="section-title" style="color: #555; font-size: 15px;">수집된 원본 데이터</div>
-                    <div id="rawDataContainer" class="raw-data-list"></div>
+
+                <div class="results-layout">
+
+                    <div class="main-results-column">
+
+                        <div class="card">
+
+                            <div id="imageGallery" class="image-gallery"></div>
+
+                            <div class="section-title">요약 리포트</div>
+                            <div id="reportText" class="report-text"></div>
+
+                            <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+
+                            <div class="section-title" style="color: #555; font-size: 15px;">
+                                수집된 원본 데이터
+                            </div>
+
+                            <div id="rawDataContainer" class="raw-data-list"></div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="youtube-sidebar" id="youtubeSidebar"></div>
+
                 </div>
+
             </div>
 
             <div class="search-wrapper" id="searchWrapper">
@@ -133,7 +640,8 @@
                         <option value="qdr:d">하루</option>
                     </select>
 
-                    <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요" onkeypress="if(event.key === 'Enter') doSearch()">
+                    <input type="text" id="searchInput" placeholder="분석할 키워드를 입력하세요"
+                        onkeypress="if(event.key === 'Enter') doSearch()">
                     <button id="searchBtn" onclick="doSearch()">분석</button>
                 </div>
             </div>
@@ -153,13 +661,13 @@
             document.getElementById("selectedRegionUI").innerHTML = `<img src="${imgSrc}" alt="${value}"> ${value}`;
         }
 
-        document.addEventListener("click", function() {
+        document.addEventListener("click", function () {
             document.getElementById("dropdownList").classList.remove("select-show");
         });
-        
+
         async function translateText(btnElement, textToTranslate) {
             const container = btnElement.nextElementSibling;
-            
+
             if (container.style.display === 'block') {
                 container.style.display = 'none';
                 btnElement.innerText = '번역 보기';
@@ -208,14 +716,14 @@
             }
         }
 
-       async function doSearch() {
+        async function doSearch() {
             const queryInput = document.getElementById('searchInput');
             const originalQuery = queryInput.value.trim();
             const currentRegion = document.getElementById('regionSelect').value;
             const searchBtn = document.getElementById('searchBtn');
             const loadingContainer = document.getElementById('loadingContainer');
             const loadingText = document.getElementById('loadingText');
-            
+
             if (!originalQuery) return alert('검색어를 입력하세요.');
 
             if (searchAbortController) searchAbortController.abort();
@@ -236,24 +744,24 @@
                     body: JSON.stringify({ query: originalQuery, current_region: currentRegion }),
                     signal: signal
                 });
-                
+
                 const intentData = await intentRes.json();
                 const optimizedQuery = intentData.optimized_query;
                 const targetRegion = intentData.region;
 
                 queryInput.value = optimizedQuery;
-                
+
                 if (targetRegion !== currentRegion) {
                     let flagImg = 'kr.png';
-                    if(targetRegion === 'JP') flagImg = 'jp.png';
-                    if(targetRegion === 'US') flagImg = 'us.png';
+                    if (targetRegion === 'JP') flagImg = 'jp.png';
+                    if (targetRegion === 'US') flagImg = 'us.png';
                     selectOption(targetRegion, `https://flagcdn.com/w40/${flagImg.split('.')[0]}.png`);
                 }
-                
+
                 loadingText.innerText = `[${targetRegion}] 커뮤니티에서 '${optimizedQuery}' 데이터를 수집 및 분석 중입니다...`;
 
                 const tbs = document.getElementById('timeSelect').value;
-                
+
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -265,13 +773,13 @@
 
                 if (response.ok) {
                     const gallery = document.getElementById('imageGallery');
-                    gallery.innerHTML = ''; 
-                    
+                    gallery.innerHTML = '';
+
                     if (data.images && data.images.length > 0) {
                         data.images.forEach(url => {
                             const img = document.createElement('img');
                             img.src = url;
-                            img.onerror = function() { this.style.display = 'none'; };
+                            img.onerror = function () { this.style.display = 'none'; };
                             gallery.appendChild(img);
                         });
                         gallery.style.display = 'flex';
@@ -281,37 +789,130 @@
 
                     let reportContent = data.report;
                     const totalDataCount = data.raw_data_list ? data.raw_data_list.length : 0;
-                    
+
                     let metaInfo = `[${totalDataCount}개의 데이터를 기반으로 분석되었습니다.]\n`;
                     if (originalQuery !== optimizedQuery || targetRegion !== currentRegion) {
                         metaInfo += `검색 도구: [국가: ${targetRegion}] / [검색어: '${optimizedQuery}']\n`;
                     }
                     reportContent = metaInfo + "\n" + reportContent;
-                    
+
                     document.getElementById('reportText').innerText = reportContent;
-                    
+
+                    const youtubeSidebar = document.getElementById('youtubeSidebar');
+                    youtubeSidebar.innerHTML = '';
+
+                    if (data.youtube_sidebar && data.youtube_sidebar.length > 0) {
+
+                        const title = document.createElement('div');
+                        title.className = 'youtube-sidebar-title';
+                        title.innerText = '관련 YouTube 반응';
+
+                        youtubeSidebar.appendChild(title);
+
+                        data.youtube_sidebar.forEach(video => {
+
+                            const sentiment =
+                                video.top_comment.sentiment || 'other';
+
+                            const sentimentLabel = {
+                                positive: '긍정',
+                                negative: '부정',
+                                other: '기타'
+                            }[sentiment] || '기타';
+
+                            const div = document.createElement('div');
+
+                            div.className = 'youtube-card';
+
+                            div.onclick = () => {
+                                window.open(video.video_url, '_blank');
+                            };
+
+                            div.innerHTML = `
+            <div class="sentiment-bar sentiment-${sentiment}"></div>
+
+            <img
+                class="youtube-thumb"
+                src="${video.thumbnail}"
+                loading="lazy"
+            >
+
+            <div class="youtube-info">
+                <div class="youtube-title">
+                    ${video.title}
+                </div>
+            </div>
+
+            <div class="comment-popup">
+
+                <div class="comment-text">
+                    ${video.top_comment.text}
+                </div>
+
+                <div class="comment-meta">
+
+                    <div class="
+                        sentiment-chip
+                        chip-${sentiment}
+                    "></div>
+
+                    <span>${sentimentLabel}</span>
+
+                    <span>
+                        👍 ${video.top_comment.likes}
+                    </span>
+
+                </div>
+
+            </div>
+        `;
+
+                            youtubeSidebar.appendChild(div);
+                        });
+
+                    } else {
+
+                        youtubeSidebar.innerHTML = `
+        <div class="youtube-sidebar-title">
+            관련 YouTube 반응
+        </div>
+
+        <div style="
+            background:white;
+            border-radius:12px;
+            border:1px solid #eee;
+            padding:20px;
+            color:#777;
+            font-size:14px;
+            line-height:1.5;
+        ">
+            관련 YouTube 데이터를 찾지 못했습니다.
+        </div>
+    `;
+                    }
+
                     const rawContainer = document.getElementById('rawDataContainer');
-                    rawContainer.innerHTML = ''; 
-                    
+                    rawContainer.innerHTML = '';
+
                     if (data.raw_data_list && data.raw_data_list.length > 0) {
                         data.raw_data_list.forEach(item => {
                             const faviconUrl = `https://www.google.com/s2/favicons?domain=${item.site}&sz=32`;
                             const dateHtml = item.date ? `<span class="raw-date">${item.date}</span>` : '';
-                            
+
                             const div = document.createElement('div');
-                            
+
                             let topClass = '';
                             let badgeHtml = '';
                             if (item.is_top_reference) {
                                 topClass = ' top-reference';
                                 badgeHtml = `<div class="top-ref-badge">이 글을 참고해보세요</div>`;
                             }
-                            
+
                             div.className = 'raw-item' + topClass;
-                            
+
                             const textToTranslate = `제목: ${item.title}\n내용: ${item.snippet}`;
                             const safeText = encodeURIComponent(textToTranslate).replace(/'/g, "%27");
-                            
+
                             let translateHtml = '';
                             if (targetRegion !== 'KR') {
                                 translateHtml = `
@@ -319,7 +920,7 @@
                                     <div class="translated-text" data-translated="false"></div>
                                 `;
                             }
-                            
+
                             div.innerHTML = `
                                 ${badgeHtml}
                                 <div class="raw-header">
@@ -333,7 +934,7 @@
                                 <p class="raw-snippet">${item.snippet}</p>
                                 ${translateHtml}
                             `;
-                            
+
                             if (item.is_top_reference) {
                                 rawContainer.insertBefore(div, rawContainer.firstChild);
                             } else {
@@ -343,10 +944,10 @@
                     } else {
                         rawContainer.innerHTML = '<p style="color:#666;">수집된 데이터가 없습니다.</p>';
                     }
-                    
+
                     loadingContainer.style.display = 'none';
                     document.getElementById('resultsContainer').style.display = 'block';
-                    
+
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
                     alert('에러 발생: ' + data.error);
@@ -369,4 +970,5 @@
     </script>
 
 </body>
+
 </html>

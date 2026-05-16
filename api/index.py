@@ -6,6 +6,7 @@ from openai import OpenAI
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 import re
+from urllib.parse import urlparse, parse_qs
 
 app = Flask(__name__)
 
@@ -17,6 +18,8 @@ except ImportError:
 
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
+#유튜브 api 일단 발급받아놨습니다.
 
 COMMUNITY_THRESHOLD = 10
 
@@ -308,6 +311,199 @@ def attach_similarity_scores(summary, raw_list):
         
     return raw_list
 
+def extract_youtube_video_id(url):
+    try:
+        parsed = urlparse(url)
+
+        if parsed.hostname in ["www.youtube.com", "youtube.com"]:
+            return parse_qs(parsed.query).get("v", [None])[0]
+
+        if parsed.hostname == "youtu.be":
+            return parsed.path[1:]
+
+    except Exception:
+        pass
+
+    return None
+
+
+def is_low_quality_comment(text):
+    text = text.strip().lower()
+
+    if len(text) < 12:
+        return True
+
+    return False
+
+
+def classify_comments_batch(comment_texts):
+    if not comment_texts:
+        return []
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    formatted = "\n".join([
+        f"{idx+1}. {text}"
+        for idx, text in enumerate(comment_texts)
+    ])
+
+    prompt = f"""
+다음 유튜브 댓글들을 각각 분류하세요.
+
+가능한 분류:
+- positive
+- negative
+- other
+
+반드시 JSON 배열만 반환하세요.
+
+예시:
+["positive", "other"]
+
+댓글:
+{formatted}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            response_format={ "type": "json_object" },
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 유튜브 댓글 감정 분류기입니다."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            temperature=0
+        )
+
+        raw = response.choices[0].message.content
+
+        parsed = json.loads(raw)
+
+        if isinstance(parsed, dict):
+            parsed = parsed.get("results", [])
+
+        if not isinstance(parsed, list):
+            return ["other"] * len(comment_texts)
+
+        return parsed
+
+    except Exception:
+        return ["other"] * len(comment_texts)
+
+
+def fetch_youtube_sidebar_data(raw_list):
+    youtube_entries = []
+
+    seen_ids = set()
+
+    for item in raw_list:
+        link = item.get("link", "")
+
+        if "youtube.com" not in link and "youtu.be" not in link:
+            continue
+
+        video_id = extract_youtube_video_id(link)
+
+        if not video_id:
+            continue
+
+        if video_id in seen_ids:
+            continue
+
+        seen_ids.add(video_id)
+
+        youtube_entries.append({
+            "video_id": video_id,
+            "title": item.get("title", "제목 없음"),
+            "thumbnail": f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg",
+            "video_url": f"https://www.youtube.com/watch?v={video_id}"
+        })
+
+    youtube_entries = youtube_entries[:6]
+
+    comments_to_classify = []
+
+    for entry in youtube_entries:
+        url = "https://www.googleapis.com/youtube/v3/commentThreads"
+
+        params = {
+            "part": "snippet",
+            "videoId": entry["video_id"],
+            "maxResults": 10,
+            "order": "relevance",
+            "textFormat": "plainText",
+            "key": YOUTUBE_API_KEY
+        }
+
+        try:
+            res = requests.get(url, params=params).json()
+
+            usable_comments = []
+
+            for item in res.get("items", []):
+                snippet = item["snippet"]["topLevelComment"]["snippet"]
+
+                text = snippet.get("textDisplay", "")
+                likes = snippet.get("likeCount", 0)
+
+                if is_low_quality_comment(text):
+                    continue
+
+                usable_comments.append({
+                    "text": text,
+                    "likes": likes
+                })
+
+            usable_comments.sort(
+                key=lambda x: x["likes"],
+                reverse=True
+            )
+
+            if usable_comments:
+                top_comment = usable_comments[0]
+            else:
+                top_comment = {
+                    "text": "데이터가 부족합니다.",
+                    "likes": 0
+                }
+
+        except Exception:
+            top_comment = {
+                "text": "댓글 데이터를 불러올 수 없습니다.",
+                "likes": 0
+            }
+
+        entry["top_comment"] = top_comment
+
+        comments_to_classify.append(
+            top_comment["text"]
+        )
+
+    sentiments = classify_comments_batch(
+        comments_to_classify
+    )
+
+    for idx, entry in enumerate(youtube_entries):
+        sentiment = "other"
+
+        if idx < len(sentiments):
+            if sentiments[idx] in [
+                "positive",
+                "negative",
+                "other"
+            ]:
+                sentiment = sentiments[idx]
+
+        entry["top_comment"]["sentiment"] = sentiment
+
+    return youtube_entries
+
 @app.route('/api/parse_intent', methods=['POST'])
 def parse_intent_handler():
     data = request.json
@@ -390,6 +586,9 @@ def search_handler():
         images = fetch_top_images(search_query, tbs=tbs)
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
 
+
+    youtube_sidebar = fetch_youtube_sidebar_data(raw_list)
+
     final_report = generate_core_summary(collected_context)
     raw_list = attach_similarity_scores(final_report, raw_list)
 
@@ -398,7 +597,8 @@ def search_handler():
         "report": final_report,
         "raw_data_list": raw_list,
         "site_stats": site_stats,
-        "translated_query": search_query
+        "translated_query": search_query,
+        "youtube_sidebar": youtube_sidebar
     })
 
 @app.route('/api/translate', methods=['POST'])
