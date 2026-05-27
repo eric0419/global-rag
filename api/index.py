@@ -581,7 +581,7 @@ def search_handler():
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     else:
         search_query = query
-        target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
+        target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live", "youtube.com"]
         gl, hl = "kr", "ko"
         images = fetch_top_images(search_query, tbs=tbs)
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
