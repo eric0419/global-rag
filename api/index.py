@@ -4,9 +4,8 @@ import json
 import os
 from openai import OpenAI
 from datetime import datetime, timedelta
-from urllib.parse import urlparse
-import re
 from urllib.parse import urlparse, parse_qs
+import re
 
 app = Flask(__name__)
 
@@ -19,7 +18,6 @@ except ImportError:
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
-#유튜브 api 일단 발급받아놨습니다.
 
 COMMUNITY_THRESHOLD = 10
 
@@ -147,7 +145,7 @@ def fetch_paginated(query, gl="kr", hl="ko", tbs="", target=40):
                 break
             all_items.extend(items)
             page += 1
-        except Exception as e:
+        except Exception:
             break
 
     return all_items[:target]
@@ -208,7 +206,7 @@ def fetch_by_site_search(query, target_sites, gl="kr", hl="ko", tbs=""):
                     "date": entry.get('date', ''),
                     "dt_object": parse_date(entry.get('date', ''))
                 })
-        except Exception as e:
+        except Exception:
             site_counts[site] = 0
 
     raw_list.sort(key=lambda x: x.pop('dt_object'), reverse=True)
@@ -314,110 +312,73 @@ def attach_similarity_scores(summary, raw_list):
 def extract_youtube_video_id(url):
     try:
         parsed = urlparse(url)
-
         if parsed.hostname in ["www.youtube.com", "youtube.com"]:
             return parse_qs(parsed.query).get("v", [None])[0]
-
         if parsed.hostname == "youtu.be":
             return parsed.path[1:]
-
     except Exception:
         pass
-
     return None
-
 
 def is_low_quality_comment(text):
     text = text.strip().lower()
-
     if len(text) < 12:
         return True
-
     return False
-
 
 def classify_comments_batch(comment_texts):
     if not comment_texts:
         return []
 
     client = OpenAI(api_key=OPENAI_API_KEY)
-
-    formatted = "\n".join([
-        f"{idx+1}. {text}"
-        for idx, text in enumerate(comment_texts)
-    ])
+    formatted = "\n".join([f"{idx+1}. {text}" for idx, text in enumerate(comment_texts)])
 
     prompt = f"""
 다음 유튜브 댓글들을 각각 분류하세요.
-
 가능한 분류:
 - positive
 - negative
 - other
-
 반드시 JSON 배열만 반환하세요.
-
 예시:
 ["positive", "other"]
 
 댓글:
 {formatted}
 """
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             response_format={ "type": "json_object" },
             messages=[
-                {
-                    "role": "system",
-                    "content": "당신은 유튜브 댓글 감정 분류기입니다."
-                },
-                {
-                    "role": "user",
-                    "content": prompt
-                }
+                {"role": "system", "content": "당신은 유튜브 댓글 감정 분류기입니다."},
+                {"role": "user", "content": prompt}
             ],
             temperature=0
         )
-
         raw = response.choices[0].message.content
-
         parsed = json.loads(raw)
 
         if isinstance(parsed, dict):
             parsed = parsed.get("results", [])
-
         if not isinstance(parsed, list):
             return ["other"] * len(comment_texts)
-
         return parsed
-
     except Exception:
         return ["other"] * len(comment_texts)
 
-
 def fetch_youtube_sidebar_data(raw_list):
     youtube_entries = []
-
     seen_ids = set()
 
     for item in raw_list:
         link = item.get("link", "")
-
         if "youtube.com" not in link and "youtu.be" not in link:
             continue
-
         video_id = extract_youtube_video_id(link)
-
-        if not video_id:
+        if not video_id or video_id in seen_ids:
             continue
-
-        if video_id in seen_ids:
-            continue
-
         seen_ids.add(video_id)
-
         youtube_entries.append({
             "video_id": video_id,
             "title": item.get("title", "제목 없음"),
@@ -426,12 +387,10 @@ def fetch_youtube_sidebar_data(raw_list):
         })
 
     youtube_entries = youtube_entries[:6]
-
     comments_to_classify = []
 
     for entry in youtube_entries:
         url = "https://www.googleapis.com/youtube/v3/commentThreads"
-
         params = {
             "part": "snippet",
             "videoId": entry["video_id"],
@@ -440,66 +399,30 @@ def fetch_youtube_sidebar_data(raw_list):
             "textFormat": "plainText",
             "key": YOUTUBE_API_KEY
         }
-
         try:
             res = requests.get(url, params=params).json()
-
             usable_comments = []
-
             for item in res.get("items", []):
                 snippet = item["snippet"]["topLevelComment"]["snippet"]
-
                 text = snippet.get("textDisplay", "")
                 likes = snippet.get("likeCount", 0)
-
                 if is_low_quality_comment(text):
                     continue
-
-                usable_comments.append({
-                    "text": text,
-                    "likes": likes
-                })
-
-            usable_comments.sort(
-                key=lambda x: x["likes"],
-                reverse=True
-            )
-
-            if usable_comments:
-                top_comment = usable_comments[0]
-            else:
-                top_comment = {
-                    "text": "데이터가 부족합니다.",
-                    "likes": 0
-                }
-
+                usable_comments.append({"text": text, "likes": likes})
+            usable_comments.sort(key=lambda x: x["likes"], reverse=True)
+            top_comment = usable_comments[0] if usable_comments else {"text": "데이터가 부족합니다.", "likes": 0}
         except Exception:
-            top_comment = {
-                "text": "댓글 데이터를 불러올 수 없습니다.",
-                "likes": 0
-            }
-
+            top_comment = {"text": "댓글 데이터를 불러올 수 없습니다.", "likes": 0}
+        
         entry["top_comment"] = top_comment
+        comments_to_classify.append(top_comment["text"])
 
-        comments_to_classify.append(
-            top_comment["text"]
-        )
-
-    sentiments = classify_comments_batch(
-        comments_to_classify
-    )
+    sentiments = classify_comments_batch(comments_to_classify)
 
     for idx, entry in enumerate(youtube_entries):
         sentiment = "other"
-
-        if idx < len(sentiments):
-            if sentiments[idx] in [
-                "positive",
-                "negative",
-                "other"
-            ]:
-                sentiment = sentiments[idx]
-
+        if idx < len(sentiments) and sentiments[idx] in ["positive", "negative", "other"]:
+            sentiment = sentiments[idx]
         entry["top_comment"]["sentiment"] = sentiment
 
     return youtube_entries
@@ -516,22 +439,24 @@ def parse_intent_handler():
     client = OpenAI(api_key=OPENAI_API_KEY)
     
     system_prompt = f"""
-    당신은 글로벌 여론 검색 엔진의 '쿼리 라우터(Query Router)'입니다.
-    사용자의 자연어 질문을 분석하여 타겟 국가코드(KR, JP, US)와 검색 엔진에 입력할 핵심 키워드를 추출하세요.
-    
-    [규칙]
-    1. 사용자의 현재 기본 국가 설정은 "{current_region}"입니다.
-    2. '일본', '미국', '해외' 등 질문 내에 명백하게 특정 국가를 지칭하는 단어가 있다면 그에 맞춰 region을 "JP" 또는 "US" 등으로 변경하세요.
-    3. 특정 국가를 지칭하는 단어가 없다면, 반드시 사용자의 현재 기본 국가 설정인 "{current_region}"을 그대로 유지하세요.
-    4. [중요] optimized_query를 만들 때, '일본', '미국', '한국', '해외' 같은 국가/지역 지칭 단어와 '~알려줘', '~어때', '~찾아줘' 같은 대화형 서술어만 제거하세요.
-    5. '후기', '반응', '논란', '평가' 등 검색 목적을 나타내는 명사 키워드는 절대 지우지 말고 그대로 포함하세요.
-    
-    [변환 예시]
-    - "프로젝트 헤일메리 일본 반응 알려줘" -> region: "JP", optimized_query: "프로젝트 헤일메리 반응"
-    - "체인소맨 결말 미국 후기 어때" -> region: "US", optimized_query: "체인소맨 결말 후기"
-    - "왕이 사는 남자 후기" -> region: "{current_region}", optimized_query: "왕이 사는 남자 후기"
-    
-    6. 반드시 JSON 형식으로만 출력할 것.
+    당신은 글로벌 여론 분석 대시보드의 '검색어 라우팅 에이전트'입니다.
+    사용자가 입력한 자연어(문장형) 질문의 핵심 의도를 파악하여, 타겟 국가(region)와 검색 엔진에 입력할 최적의 명사형 키워드(optimized_query)를 추출하세요.
+
+    [핵심 규칙]
+    1. 불용어 제거: '~알려줘', '~어때', '~찾아봐', '요즘', '애들은', '진짜', '좀' 등 대화형 서술어와 수식어를 완벽하게 제거하세요.
+    2. 명사 압축: 검색 엔진(Google)이 가장 좋아할 만한 2~3개의 핵심 고유명사와 목적어(예: 후기, 반응, 리뷰)의 조합으로만 쿼리를 재구성하세요.
+    3. 지역 라우팅: 문장 내에 '일본', '미국', '해외' 등의 국가 지칭 키워드가 있다면 region을 "JP", "US" 등으로 변경하고, 해당 국가 키워드 자체는 optimized_query에서 지우세요.
+    4. 질문에 특정 국가 지칭 단어가 없다면 반드시 사용자의 현재 기본 국가 설정인 "{current_region}"을 유지하세요.
+
+    [변환 예시 (Few-Shot)]
+    - Input: "요즘 미국 애들은 마블 영화 개봉하면 반응이 어때?"
+      Output: {{"region": "US", "optimized_query": "마블 영화 반응"}}
+    - Input: "체인소맨 결말 진짜 망했는지 일본 현지 반응 좀 찾아줄래?"
+      Output: {{"region": "JP", "optimized_query": "체인소맨 결말 반응"}}
+    - Input: "흑백요리사 안성재 셰프 논란 요약해줘"
+      Output: {{"region": "{current_region}", "optimized_query": "흑백요리사 안성재 논란"}}
+
+    반드시 위 예시와 같은 JSON 형식으로만 응답하세요.
     """
     
     try:
@@ -544,14 +469,11 @@ def parse_intent_handler():
             ],
             temperature=0.1
         )
-        
         result = json.loads(response.choices[0].message.content)
-        
         return jsonify({
             "region": result.get("region", current_region),
             "optimized_query": result.get("optimized_query", user_input)
         })
-        
     except Exception:
         return jsonify({
             "region": current_region,
@@ -581,14 +503,12 @@ def search_handler():
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     else:
         search_query = query
-        target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live", "youtube.com"]
+        target_sites = ["dcinside.com", "fmkorea.com", "ruliweb.com", "theqoo.net", "arca.live"]
         gl, hl = "kr", "ko"
         images = fetch_top_images(search_query, tbs=tbs)
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
 
-
     youtube_sidebar = fetch_youtube_sidebar_data(raw_list)
-
     final_report = generate_core_summary(collected_context)
     raw_list = attach_similarity_scores(final_report, raw_list)
 
