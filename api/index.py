@@ -357,6 +357,11 @@ def classify_comments_batch(comment_texts):
             temperature=0
         )
         raw = response.choices[0].message.content
+
+        print("\n===== GPT RAW RESPONSE =====")
+        print(raw)
+        print("============================\n")
+        
         parsed = json.loads(raw)
 
         if isinstance(parsed, dict):
