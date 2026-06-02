@@ -80,12 +80,71 @@
         .main-results-column { flex: 1; min-width: 0; }
         .youtube-sidebar { width: 320px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
         .youtube-sidebar-title { font-size: 15px; font-weight: bold; color: #666; margin-bottom: -4px; }
-        .youtube-card { position: relative; overflow: hidden; border-radius: 12px; background: white; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); transition: 0.18s; }
-        .youtube-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
-        .youtube-thumb { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
-        .youtube-info { padding: 12px; }
-        .youtube-title { font-size: 14px; font-weight: 600; line-height: 1.45; color: #222; text-decoration: none; display: block; }
-        .youtube-title:hover { text-decoration: underline; color: #1a0dab; }
+        .youtube-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    background: white;
+    border: 1px solid #eee;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: 0.18s;
+}
+
+.youtube-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.thumb-wrapper {
+    position: relative;
+    overflow: hidden;
+}
+
+.youtube-thumb {
+    width: 100%;
+    display: block;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+
+.youtube-info {
+    padding: 12px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.youtube-title {
+    flex: 1;
+
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.45;
+    color: #222;
+    text-decoration: none;
+    display: block;
+}
+
+.youtube-title:hover {
+    text-decoration: underline;
+    color: #1a0dab;
+}
+
+.youtube-link-btn {
+    flex-shrink: 0;
+
+    text-decoration: none;
+    color: #777;
+
+    font-size: 18px;
+    font-weight: bold;
+
+    transition: 0.15s;
+}
+
+.youtube-link-btn:hover {
+    color: #1a73e8;
+}
         
         .sentiment-bar { width: 100%; height: 6px; }
         .sentiment-positive { background: #3b82f6; }
@@ -93,7 +152,9 @@
         .sentiment-other { background: #facc15; }
         
         .comment-popup { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); color: white; padding: 16px; opacity: 0; transition: opacity 0.18s; display: flex; flex-direction: column; justify-content: center; cursor: pointer; }
-        .youtube-card:hover .comment-popup { opacity: 1; }
+        .thumb-wrapper:hover .comment-popup { opacity: 1; }
+        .thumb-wrapper {position: relative;overflow: hidden;}
+
         .comment-text { font-size: 13px; line-height: 1.55; margin-bottom: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
         .comment-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
         .sentiment-chip { width: 11px; height: 11px; border-radius: 3px; }
@@ -362,6 +423,12 @@
 
                         data.youtube_sidebar.forEach(video => {
                             const sentiment = video.top_comment.sentiment || 'other';
+
+                            console.log("sentiment =", sentiment);
+                            console.log("top_comment =", video.top_comment);
+                            console.log(data.youtube_sidebar);
+                            console.log(JSON.stringify(data.youtube_sidebar[0], null, 2));
+
                             const sentimentLabel = { positive: '긍정', negative: '부정', other: '기타' }[sentiment] || '기타';
                             const div = document.createElement('div');
                             div.className = 'youtube-card';
@@ -369,23 +436,51 @@
                             const safeText = encodeURIComponent(video.top_comment.text).replace(/'/g, "%27");
 
                             div.innerHTML = `
-                                <div class="sentiment-bar sentiment-${sentiment}"></div>
-                                <img class="youtube-thumb" src="${video.thumbnail}" loading="lazy">
-                                <div class="youtube-info">
-                                    <a href="${video.video_url}" target="_blank" class="youtube-title" onclick="event.stopPropagation()">
-                                        ${video.title}
-                                    </a>
-                                </div>
-                                <div class="comment-popup" onclick="translateYoutubeComment(this.closest('.youtube-card'), decodeURIComponent('${safeText}'))">
-                                    <div class="comment-text" data-translated="false">${video.top_comment.text}</div>
-                                    <div class="comment-meta">
-                                        <div class="sentiment-chip chip-${sentiment}"></div>
-                                        <span>${sentimentLabel}</span>
-                                        <span>👍 ${video.top_comment.likes}</span>
-                                    </div>
-                                    <div class="click-hint">👆 클릭하여 한국어 번역</div>
-                                </div>
-                            `;
+    <div class="sentiment-bar sentiment-${sentiment}"></div>
+
+    <div class="thumb-wrapper">
+
+        <img class="youtube-thumb"
+             src="${video.thumbnail}"
+             loading="lazy">
+
+        <div class="comment-popup"
+             onclick="translateYoutubeComment(this.closest('.youtube-card'), decodeURIComponent('${safeText}'))">
+
+            <div class="comment-text" data-translated="false">
+                ${video.top_comment.text}
+            </div>
+
+            <div class="comment-meta">
+                <div class="sentiment-chip chip-${sentiment}"></div>
+                <span>${sentimentLabel}</span>
+                <span>👍 ${video.top_comment.likes}</span>
+            </div>
+
+            <div class="click-hint">
+                👆 클릭하여 한국어 번역
+            </div>
+
+        </div>
+    </div>
+
+    <div class="youtube-info">
+
+        <a href="${video.video_url}"
+           target="_blank"
+           class="youtube-title">
+            ${video.title}
+        </a>
+
+        <a href="${video.video_url}"
+           target="_blank"
+           class="youtube-link-btn"
+           title="유튜브에서 열기">
+            ↗
+        </a>
+
+    </div>
+`;
                             youtubeSidebar.appendChild(div);
                         });
                     } else {
