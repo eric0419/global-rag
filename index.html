@@ -41,16 +41,6 @@
         button:hover { background-color: #1557b0; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         
-        
-        .translated-query-box {
-            display:none;
-            margin-bottom:10px;
-            color:#666;
-            font-size:14px;
-            font-style:italic;
-            padding:0 8px;
-        }
-
         .results-container { display: none; width: 100%; animation: fadeIn 0.5s ease forwards; }
         .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); line-height: 1.6; }
         .section-title { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #1a73e8; }
@@ -151,7 +141,7 @@
             </div>
 
             <div class="search-wrapper" id="searchWrapper">
-                <div id="translatedQueryBox" class="translated-query-box"></div>
+                <div id="translatedQueryBox" class="translated-query-box" style="display:none;margin-bottom:10px;color:#666;font-size:14px;font-style:italic;"></div>
                 <div class="search-box">
                     <input type="hidden" id="regionSelect" value="KR">
                     <div class="custom-select" onclick="toggleDropdown(event)">
@@ -290,11 +280,10 @@
         async function doSearch() {
             const queryInput = document.getElementById('searchInput');
             const originalQuery = queryInput.value.trim();
-            const region = document.getElementById('regionSelect').value;
+            const currentRegion = document.getElementById('regionSelect').value;
             const searchBtn = document.getElementById('searchBtn');
             const loadingContainer = document.getElementById('loadingContainer');
             const loadingText = document.getElementById('loadingText');
-            const translatedQueryBox = document.getElementById('translatedQueryBox');
 
             if (!originalQuery) return alert('검색어를 입력하세요.');
 
@@ -305,30 +294,24 @@
             document.getElementById('mainTitle').style.display = 'none';
             document.getElementById('mainLayout').classList.add('searched');
             document.getElementById('resultsContainer').style.display = 'none';
-            translatedQueryBox.style.display = 'none';
-
-            loadingText.innerText = '데이터를 수집 및 분석 중입니다...';
+            loadingText.innerText = '검색 데이터를 수집 및 분석 중입니다...';
             loadingContainer.style.display = 'block';
             searchBtn.disabled = true;
 
             try {
+
                 const tbs = document.getElementById('timeSelect').value;
 
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: originalQuery, region: region, tbs: tbs }),
+                    body: JSON.stringify({ query: originalQuery, region: currentRegion, tbs: tbs }),
                     signal: signal
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    if (data.translated_query) {
-                        translatedQueryBox.innerText = `검색 사용어: ${data.translated_query}`;
-                        translatedQueryBox.style.display = 'block';
-                    }
-
                     const gallery = document.getElementById('imageGallery');
                     gallery.innerHTML = '';
 
@@ -346,12 +329,25 @@
 
                     let reportContent = data.report;
                     const totalDataCount = data.raw_data_list ? data.raw_data_list.length : 0;
+
                     let metaInfo = `[${totalDataCount}개의 데이터를 기반으로 분석되었습니다.]\n`;
-                    metaInfo += `검색 국가: ${region}\n`;
+                    metaInfo += `검색 도구: [국가: ${currentRegion}]\n`;
+                    
                     reportContent = metaInfo + "\n" + reportContent;
+
                     document.getElementById('reportText').innerText = reportContent;
 
-const youtubeSidebar = document.getElementById('youtubeSidebar');
+                    const translatedQueryBox = document.getElementById('translatedQueryBox');
+                    if (translatedQueryBox) {
+                        if (data.translated_query) {
+                            translatedQueryBox.innerText = `검색 사용어: ${data.translated_query}`;
+                            translatedQueryBox.style.display = 'block';
+                        } else {
+                            translatedQueryBox.style.display = 'none';
+                        }
+                    }
+
+                    const youtubeSidebar = document.getElementById('youtubeSidebar');
                     youtubeSidebar.innerHTML = '';
 
                     if (data.youtube_sidebar && data.youtube_sidebar.length > 0) {
@@ -418,7 +414,7 @@ const youtubeSidebar = document.getElementById('youtubeSidebar');
                             const safeText = encodeURIComponent(textToTranslate).replace(/'/g, "%27");
 
                             let translateHtml = '';
-                            if (targetRegion !== 'KR') {
+                            if (currentRegion !== 'KR') {
                                 translateHtml = `
                                     <button class="translate-btn" onclick="translateText(this, decodeURIComponent('${safeText}'))">번역 보기</button>
                                     <div class="translated-text" data-translated="false"></div>
@@ -470,7 +466,6 @@ const youtubeSidebar = document.getElementById('youtubeSidebar');
                 searchAbortController = null;
             }
         }
-
     </script>
 </body>
 </html>
