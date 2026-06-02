@@ -423,6 +423,10 @@
 
                         data.youtube_sidebar.forEach(video => {
                             const sentiment = video.top_comment.sentiment || 'other';
+
+                            console.log("sentiment =", sentiment);
+                            console.log("top_comment =", video.top_comment);
+
                             const sentimentLabel = { positive: '긍정', negative: '부정', other: '기타' }[sentiment] || '기타';
                             const div = document.createElement('div');
                             div.className = 'youtube-card';
