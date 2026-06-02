@@ -339,9 +339,11 @@ def classify_comments_batch(comment_texts):
 - positive
 - negative
 - other
-반드시 JSON 배열만 반환하세요.
+반드시 'results'라는 키에 분류 결과를 배열로 담은 JSON 객체 형식으로 반환하세요.
 예시:
-["positive", "other"]
+{{
+  "results": ["positive", "other"]
+}}
 
 댓글:
 {formatted}
