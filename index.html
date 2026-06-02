@@ -426,6 +426,8 @@
 
                             console.log("sentiment =", sentiment);
                             console.log("top_comment =", video.top_comment);
+                            console.log(data.youtube_sidebar);
+                            console.log(JSON.stringify(data.youtube_sidebar[0], null, 2));
 
                             const sentimentLabel = { positive: '긍정', negative: '부정', other: '기타' }[sentiment] || '기타';
                             const div = document.createElement('div');
