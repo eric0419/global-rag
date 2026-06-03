@@ -28,7 +28,7 @@
         .select-selected { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: #333; padding: 5px; }
         .select-selected img { width: 24px; border-radius: 2px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); }
         .select-selected::after { content: '▼'; font-size: 10px; margin-left: 5px; color: #888; }
-        .select-items { position: absolute; bottom: 130%; left: 0; background-color: #fff; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1); width: 110px; z-index: 101; display: none; flex-direction: column; overflow: hidden; }
+        .select-items { position: absolute; bottom: 130%; left: 0; background-color: #fff; border: 1px solid #ddd; border-radius: 12px; box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1); width: 110px; z-index: 101; display: none; flex-direction: column; overflow: hidden; max-height: 300px; overflow-y: auto; }
         .select-items div { display: flex; align-items: center; gap: 10px; padding: 12px 15px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background-color 0.2s; }
         .select-items div:hover { background-color: #f4f7f6; }
         .select-items img { width: 24px; border-radius: 2px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); }
@@ -80,71 +80,15 @@
         .main-results-column { flex: 1; min-width: 0; }
         .youtube-sidebar { width: 320px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 20px; }
         .youtube-sidebar-title { font-size: 15px; font-weight: bold; color: #666; margin-bottom: -4px; }
-        .youtube-card {
-    position: relative;
-    overflow: hidden;
-    border-radius: 12px;
-    background: white;
-    border: 1px solid #eee;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-    transition: 0.18s;
-}
-
-.youtube-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
-}
-
-.thumb-wrapper {
-    position: relative;
-    overflow: hidden;
-}
-
-.youtube-thumb {
-    width: 100%;
-    display: block;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-}
-
-.youtube-info {
-    padding: 12px;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-}
-
-.youtube-title {
-    flex: 1;
-
-    font-size: 14px;
-    font-weight: 600;
-    line-height: 1.45;
-    color: #222;
-    text-decoration: none;
-    display: block;
-}
-
-.youtube-title:hover {
-    text-decoration: underline;
-    color: #1a0dab;
-}
-
-.youtube-link-btn {
-    flex-shrink: 0;
-
-    text-decoration: none;
-    color: #777;
-
-    font-size: 18px;
-    font-weight: bold;
-
-    transition: 0.15s;
-}
-
-.youtube-link-btn:hover {
-    color: #1a73e8;
-}
+        .youtube-card { position: relative; overflow: hidden; border-radius: 12px; background: white; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); transition: 0.18s; }
+        .youtube-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08); }
+        .thumb-wrapper { position: relative; overflow: hidden; }
+        .youtube-thumb { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; }
+        .youtube-info { padding: 12px; display: flex; align-items: flex-start; gap: 8px; }
+        .youtube-title { flex: 1; font-size: 14px; font-weight: 600; line-height: 1.45; color: #222; text-decoration: none; display: block; }
+        .youtube-title:hover { text-decoration: underline; color: #1a0dab; }
+        .youtube-link-btn { flex-shrink: 0; text-decoration: none; color: #777; font-size: 18px; font-weight: bold; transition: 0.15s; }
+        .youtube-link-btn:hover { color: #1a73e8; }
         
         .sentiment-bar { width: 100%; height: 6px; }
         .sentiment-positive { background: #3b82f6; }
@@ -153,8 +97,6 @@
         
         .comment-popup { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.82); color: white; padding: 16px; opacity: 0; transition: opacity 0.18s; display: flex; flex-direction: column; justify-content: center; cursor: pointer; }
         .thumb-wrapper:hover .comment-popup { opacity: 1; }
-        .thumb-wrapper {position: relative;overflow: hidden;}
-
         .comment-text { font-size: 13px; line-height: 1.55; margin-bottom: 14px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; }
         .comment-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; }
         .sentiment-chip { width: 11px; height: 11px; border-radius: 3px; }
@@ -162,7 +104,6 @@
         .chip-negative { background: #ef4444; }
         .chip-other { background: #facc15; }
         .click-hint { font-size: 10px; color: rgba(255,255,255,0.6); text-align: center; margin-top: 10px; font-weight: bold; }
-
         .yt-loader { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top: 2px solid #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 6px; vertical-align: middle; }
 
         @media (max-width: 1200px) {
@@ -209,15 +150,14 @@
                             <img src="https://flagcdn.com/w40/kr.png" alt="KR"> KR
                         </div>
                         <div class="select-items" id="dropdownList">
-                            <div onclick="selectOption('KR', 'https://flagcdn.com/w40/kr.png')">
-                                <img src="https://flagcdn.com/w40/kr.png" alt="KR"> KR
-                            </div>
-                            <div onclick="selectOption('JP', 'https://flagcdn.com/w40/jp.png')">
-                                <img src="https://flagcdn.com/w40/jp.png" alt="JP"> JP
-                            </div>
-                            <div onclick="selectOption('US', 'https://flagcdn.com/w40/us.png')">
-                                <img src="https://flagcdn.com/w40/us.png" alt="US"> US
-                            </div>
+                            <div onclick="selectOption('KR', 'https://flagcdn.com/w40/kr.png')"><img src="https://flagcdn.com/w40/kr.png" alt="KR"> KR (한국)</div>
+                            <div onclick="selectOption('JP', 'https://flagcdn.com/w40/jp.png')"><img src="https://flagcdn.com/w40/jp.png" alt="JP"> JP (일본)</div>
+                            <div onclick="selectOption('US', 'https://flagcdn.com/w40/us.png')"><img src="https://flagcdn.com/w40/us.png" alt="US"> US (미국)</div>
+                            <div onclick="selectOption('DE', 'https://flagcdn.com/w40/de.png')"><img src="https://flagcdn.com/w40/de.png" alt="DE"> DE (독일)</div>
+                            <div onclick="selectOption('FR', 'https://flagcdn.com/w40/fr.png')"><img src="https://flagcdn.com/w40/fr.png" alt="FR"> FR (프랑스)</div>
+                            <div onclick="selectOption('GB', 'https://flagcdn.com/w40/gb.png')"><img src="https://flagcdn.com/w40/gb.png" alt="GB"> GB (영국)</div>
+                            <div onclick="selectOption('AU', 'https://flagcdn.com/w40/au.png')"><img src="https://flagcdn.com/w40/au.png" alt="AU"> AU (호주)</div>
+                            <div onclick="selectOption('TR', 'https://flagcdn.com/w40/tr.png')"><img src="https://flagcdn.com/w40/tr.png" alt="TR"> TR (터키)</div>
                         </div>
                     </div>
 
@@ -232,10 +172,7 @@
                     <button id="searchBtn" onclick="doSearch()">분석</button>
                 </div>
 
-                <div id="translatedQueryBox" class="translated-query-box" style=
-                "display:none;margin-top:6px;text-align:right;color:#999;font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-
-
+                <div id="translatedQueryBox" class="translated-query-box" style="display:none;margin-top:6px;text-align:right;color:#999;font-size:13px;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
             </div>
         </div>
     </div>
@@ -269,10 +206,8 @@
                 btnElement.innerText = '번역 닫기';
                 return;
             }
-
             btnElement.innerText = '번역 중...';
             btnElement.disabled = true;
-
             try {
                 const response = await fetch('/api/translate', {
                     method: 'POST',
@@ -299,22 +234,17 @@
 
         async function translateYoutubeComment(cardElement, textToTranslate) {
             const commentDiv = cardElement.querySelector('.comment-text');
-            
             if (commentDiv.dataset.translating === 'true') return;
-            
             if (commentDiv.dataset.translated === 'true') {
                 commentDiv.innerText = commentDiv.dataset.original;
                 commentDiv.dataset.translated = 'false';
                 return;
             }
-
             if (!commentDiv.dataset.original) {
                 commentDiv.dataset.original = commentDiv.innerText;
             }
-
             commentDiv.dataset.translating = 'true';
             commentDiv.innerHTML = '<span class="yt-loader"></span> 번역 분석 중...';
-
             try {
                 const response = await fetch('/api/translate', {
                     method: 'POST',
@@ -364,13 +294,37 @@
             searchBtn.disabled = true;
 
             try {
+                const intentRes = await fetch('/api/parse_intent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: originalQuery, current_region: currentRegion }),
+                    signal: signal
+                });
+
+                const intentData = await intentRes.json();
+                const optimizedQuery = intentData.optimized_query;
+                const targetRegion = intentData.region;
+
+                queryInput.value = optimizedQuery;
+
+                if (targetRegion !== currentRegion) {
+                    let flagImg = 'kr.png';
+                    if (targetRegion === 'JP') flagImg = 'jp.png';
+                    else if (targetRegion === 'US') flagImg = 'us.png';
+                    else if (targetRegion === 'DE') flagImg = 'de.png';
+                    else if (targetRegion === 'FR') flagImg = 'fr.png';
+                    else if (targetRegion === 'GB') flagImg = 'gb.png';
+                    else if (targetRegion === 'AU') flagImg = 'au.png';
+                    else if (targetRegion === 'TR') flagImg = 'tr.png';
+                    selectOption(targetRegion, `https://flagcdn.com/w40/${flagImg}`);
+                }
 
                 const tbs = document.getElementById('timeSelect').value;
 
                 const response = await fetch('/api/search', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ query: originalQuery, region: currentRegion, tbs: tbs }),
+                    body: JSON.stringify({ query: optimizedQuery, region: targetRegion, tbs: tbs }),
                     signal: signal
                 });
 
@@ -394,10 +348,8 @@
 
                     let reportContent = data.report;
                     const totalDataCount = data.raw_data_list ? data.raw_data_list.length : 0;
-
                     let metaInfo = `[${totalDataCount}개의 데이터를 기반으로 분석되었습니다.]\n`;
-                    metaInfo += `검색 도구: [국가: ${currentRegion}]\n`;
-                    
+                    metaInfo += `검색 도구: [국가: ${targetRegion}]\n`;
                     reportContent = metaInfo + "\n" + reportContent;
 
                     document.getElementById('reportText').innerText = reportContent;
@@ -423,64 +375,30 @@
 
                         data.youtube_sidebar.forEach(video => {
                             const sentiment = video.top_comment.sentiment || 'other';
-
-                            console.log("sentiment =", sentiment);
-                            console.log("top_comment =", video.top_comment);
-                            console.log(data.youtube_sidebar);
-                            console.log(JSON.stringify(data.youtube_sidebar[0], null, 2));
-
                             const sentimentLabel = { positive: '긍정', negative: '부정', other: '기타' }[sentiment] || '기타';
                             const div = document.createElement('div');
                             div.className = 'youtube-card';
-
                             const safeText = encodeURIComponent(video.top_comment.text).replace(/'/g, "%27");
 
                             div.innerHTML = `
-    <div class="sentiment-bar sentiment-${sentiment}"></div>
-
-    <div class="thumb-wrapper">
-
-        <img class="youtube-thumb"
-             src="${video.thumbnail}"
-             loading="lazy">
-
-        <div class="comment-popup"
-             onclick="translateYoutubeComment(this.closest('.youtube-card'), decodeURIComponent('${safeText}'))">
-
-            <div class="comment-text" data-translated="false">
-                ${video.top_comment.text}
-            </div>
-
-            <div class="comment-meta">
-                <div class="sentiment-chip chip-${sentiment}"></div>
-                <span>${sentimentLabel}</span>
-                <span>👍 ${video.top_comment.likes}</span>
-            </div>
-
-            <div class="click-hint">
-                👆 클릭하여 한국어 번역
-            </div>
-
-        </div>
-    </div>
-
-    <div class="youtube-info">
-
-        <a href="${video.video_url}"
-           target="_blank"
-           class="youtube-title">
-            ${video.title}
-        </a>
-
-        <a href="${video.video_url}"
-           target="_blank"
-           class="youtube-link-btn"
-           title="유튜브에서 열기">
-            ↗
-        </a>
-
-    </div>
-`;
+                                <div class="sentiment-bar sentiment-${sentiment}"></div>
+                                <div class="thumb-wrapper">
+                                    <img class="youtube-thumb" src="${video.thumbnail}" loading="lazy">
+                                    <div class="comment-popup" onclick="translateYoutubeComment(this.closest('.youtube-card'), decodeURIComponent('${safeText}'))">
+                                        <div class="comment-text" data-translated="false">${video.top_comment.text}</div>
+                                        <div class="comment-meta">
+                                            <div class="sentiment-chip chip-${sentiment}"></div>
+                                            <span>${sentimentLabel}</span>
+                                            <span>👍 ${video.top_comment.likes}</span>
+                                        </div>
+                                        <div class="click-hint">👆 클릭하여 한국어 번역</div>
+                                    </div>
+                                </div>
+                                <div class="youtube-info">
+                                    <a href="${video.video_url}" target="_blank" class="youtube-title">${video.title}</a>
+                                    <a href="${video.video_url}" target="_blank" class="youtube-link-btn" title="유튜브에서 열기">↗</a>
+                                </div>
+                            `;
                             youtubeSidebar.appendChild(div);
                         });
                     } else {
@@ -513,7 +431,7 @@
                             const safeText = encodeURIComponent(textToTranslate).replace(/'/g, "%27");
 
                             let translateHtml = '';
-                            if (currentRegion !== 'KR') {
+                            if (targetRegion !== 'KR') {
                                 translateHtml = `
                                     <button class="translate-btn" onclick="translateText(this, decodeURIComponent('${safeText}'))">번역 보기</button>
                                     <div class="translated-text" data-translated="false"></div>
