@@ -21,28 +21,13 @@ YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY")
 
 COMMUNITY_THRESHOLD = 10
 
-def translate_to_jp(query):
+def translate_query(query, target_language):
     client = OpenAI(api_key=OPENAI_API_KEY)
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "사용자의 한국어 검색어를 일본어로 번역하세요. 설명이나 따옴표 없이 번역된 결과만 출력하세요."},
-                {"role": "user", "content": query}
-            ],
-            temperature=0.3
-        )
-        return response.choices[0].message.content.strip()
-    except Exception:
-        return query
-
-def translate_to_en(query):
-    client = OpenAI(api_key=OPENAI_API_KEY)
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "사용자의 한국어 검색어를 영어로 번역하세요. 설명이나 따옴표 없이 번역된 결과만 출력하세요."},
+                {"role": "system", "content": f"사용자의 한국어 검색어를 {target_language}로 번역하세요. 설명이나 따옴표 없이 번역된 결과만 출력하세요."},
                 {"role": "user", "content": query}
             ],
             temperature=0.3
@@ -359,11 +344,6 @@ def classify_comments_batch(comment_texts):
             temperature=0
         )
         raw = response.choices[0].message.content
-
-        print("\n===== GPT RAW RESPONSE =====")
-        print(raw)
-        print("============================\n")
-        
         parsed = json.loads(raw)
 
         if isinstance(parsed, dict):
@@ -452,14 +432,15 @@ def parse_intent_handler():
     [핵심 규칙]
     1. 불용어 제거: '~알려줘', '~어때', '~찾아봐', '요즘', '애들은', '진짜', '좀' 등 대화형 서술어와 수식어를 완벽하게 제거하세요.
     2. 명사 압축: 검색 엔진(Google)이 가장 좋아할 만한 2~3개의 핵심 고유명사와 목적어(예: 후기, 반응, 리뷰)의 조합으로만 쿼리를 재구성하세요.
-    3. 지역 라우팅: 문장 내에 '일본', '미국', '해외' 등의 국가 지칭 키워드가 있다면 region을 "JP", "US" 등으로 변경하고, 해당 국가 키워드 자체는 optimized_query에서 지우세요.
+    3. 지역 라우팅: 문장 내에 국가를 지칭하는 단어가 있다면 아래의 region 코드로 변경하고, 해당 국가 키워드 자체는 optimized_query에서 지우세요.
+       - 지원 국가 및 코드: KR(한국), JP(일본), US(미국), DE(독일), FR(프랑스), GB(영국), AU(호주), TR(터키)
     4. 질문에 특정 국가 지칭 단어가 없다면 반드시 사용자의 현재 기본 국가 설정인 "{current_region}"을 유지하세요.
 
     [변환 예시 (Few-Shot)]
     - Input: "요즘 미국 애들은 마블 영화 개봉하면 반응이 어때?"
       Output: {{"region": "US", "optimized_query": "마블 영화 반응"}}
-    - Input: "체인소맨 결말 진짜 망했는지 일본 현지 반응 좀 찾아줄래?"
-      Output: {{"region": "JP", "optimized_query": "체인소맨 결말 반응"}}
+    - Input: "독일 현지에서 폭스바겐 논란 여론 찾아줘"
+      Output: {{"region": "DE", "optimized_query": "폭스바겐 논란 여론"}}
     - Input: "흑백요리사 안성재 셰프 논란 요약해줘"
       Output: {{"region": "{current_region}", "optimized_query": "흑백요리사 안성재 논란"}}
 
@@ -498,14 +479,44 @@ def search_handler():
         return jsonify({"error": "검색어를 입력해주세요."}), 400
 
     if region == "JP":
-        search_query = translate_to_jp(query)
+        search_query = translate_query(query, "일본어")
         gl, hl = "jp", "ja"
         images = fetch_top_images(search_query, tbs=tbs)
         collected_context, raw_list, site_stats = fetch_fixed_jp_data(search_query, gl=gl, hl=hl, tbs=tbs)
     elif region == "US":
-        search_query = translate_to_en(query)
+        search_query = translate_query(query, "영어")
         target_sites = ["reddit.com", "x.com", "youtube.com", "4chan.org", "quora.com"]
         gl, hl = "us", "en"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
+    elif region == "DE":
+        search_query = translate_query(query, "독일어")
+        target_sites = ["reddit.com", "x.com", "youtube.com", "facebook.com"]
+        gl, hl = "de", "de"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
+    elif region == "FR":
+        search_query = translate_query(query, "프랑스어")
+        target_sites = ["reddit.com", "x.com", "youtube.com", "facebook.com"]
+        gl, hl = "fr", "fr"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
+    elif region == "GB":
+        search_query = translate_query(query, "영어")
+        target_sites = ["reddit.com", "x.com", "youtube.com", "facebook.com"]
+        gl, hl = "gb", "en"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
+    elif region == "AU":
+        search_query = translate_query(query, "영어")
+        target_sites = ["reddit.com", "x.com", "youtube.com", "facebook.com"]
+        gl, hl = "au", "en"
+        images = fetch_top_images(search_query, tbs=tbs)
+        collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
+    elif region == "TR":
+        search_query = translate_query(query, "튀르키예어")
+        target_sites = ["x.com", "youtube.com", "facebook.com"]
+        gl, hl = "tr", "tr"
         images = fetch_top_images(search_query, tbs=tbs)
         collected_context, raw_list, site_stats = fetch_community_data(search_query, target_sites, gl=gl, hl=hl, tbs=tbs)
     else:
